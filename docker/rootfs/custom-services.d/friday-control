@@ -1,0 +1,8 @@
+#!/usr/bin/with-contenv bash
+set -euo pipefail
+
+exec s6-setuidgid abc env DISPLAY="${DISPLAY:-:1}" \
+    /opt/friday/venv/bin/uvicorn app:app \
+    --app-dir /opt/friday/server \
+    --host 0.0.0.0 \
+    --port 8000

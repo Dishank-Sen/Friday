@@ -1,0 +1,4 @@
+{instruction}
+
+Give me the coordinate to open the application window.
+Reply with JSON only, in the form {{"x": <int>, "y": <int>}}, using coordinates normalized to a 0-{grid} grid, x first, with no prose and no markdown.
