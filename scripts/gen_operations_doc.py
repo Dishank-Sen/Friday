@@ -39,7 +39,16 @@ def render() -> str:
     for definition in OPERATIONS.values():
         lines.append(f"| `{definition.name}` | {definition.category} | `{definition.argv}` |")
     for name, (category, argv, description) in INPUT_OPERATIONS.items():
-        lines.extend(_section(name, category, description, argv, "existing action model"))
+        lines.extend(
+            _section(
+                name,
+                category,
+                description,
+                argv,
+                "existing action model",
+                "unverified in this system-operations pass; existing executor behavior was not changed",
+            )
+        )
     for definition in OPERATIONS.values():
         fields = []
         for field_name, field in definition.model.model_fields.items():
@@ -52,6 +61,7 @@ def render() -> str:
                 definition.description,
                 definition.argv,
                 ", ".join(fields),
+                VERIFIED,
             )
         )
     lines.extend(
@@ -77,7 +87,14 @@ def render() -> str:
     return "\n".join(lines)
 
 
-def _section(name: str, category: str, description: str, argv: str, parameters: str) -> list[str]:
+def _section(
+    name: str,
+    category: str,
+    description: str,
+    argv: str,
+    parameters: str,
+    verification: str,
+) -> list[str]:
     return [
         f"## `{name}`",
         "",
@@ -88,7 +105,7 @@ def _section(name: str, category: str, description: str, argv: str, parameters: 
         "- Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.",
         "- Timeout: 10 seconds unless the operation has an explicit timeout parameter.",
         "- Side effects/security: see registry validation; destructive actions are not undoable.",
-        f"- Verification: {VERIFIED}",
+        f"- Verification: {verification}",
         "",
     ]
 

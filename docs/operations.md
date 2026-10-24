@@ -40,7 +40,7 @@ Coordinates are integer real-screen pixels. Operations use argv lists only; neve
 | `maximize_window` | windows | `wmctrl -i -r <id> -b add,maximized_vert,maximized_horz` |
 | `move_resize_window` | windows | `wmctrl -i -r <id> -e 0,x,y,w,h` |
 | `wait_for_window` | windows | `xdotool search --sync --onlyvisible --name <title>` |
-| `set_clipboard` | clipboard | `xclip -selection clipboard` |
+| `set_clipboard` | clipboard | `xclip -selection clipboard -loops 0` |
 | `get_clipboard` | clipboard | `xclip -selection clipboard -o` |
 | `is_running` | processes | `pgrep -x <name>` |
 | `list_processes` | processes | `ps -eo pid,comm` |
@@ -59,12 +59,7 @@ Coordinates are integer real-screen pixels. Operations use argv lists only; neve
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `right_click`
 
@@ -75,12 +70,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `middle_click`
 
@@ -91,12 +81,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `double_click`
 
@@ -107,12 +92,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `triple_click`
 
@@ -123,12 +103,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `left_click_drag`
 
@@ -139,12 +114,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `mouse_move`
 
@@ -155,12 +125,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `left_mouse_down`
 
@@ -171,12 +136,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `left_mouse_up`
 
@@ -187,12 +147,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `scroll`
 
@@ -203,12 +158,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `type`
 
@@ -219,12 +169,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `key`
 
@@ -235,12 +180,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `hold_key`
 
@@ -251,12 +191,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `wait`
 
@@ -267,12 +202,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `screenshot`
 
@@ -283,12 +213,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `cursor_position`
 
@@ -299,12 +224,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `screen_size`
 
@@ -315,12 +235,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `zoom`
 
@@ -331,12 +246,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.
-- Verification: Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
-The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
-`{"operation":"set_clipboard","text":"clipboard test"}`, and
-`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
-`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
-`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal.
+- Verification: unverified in this system-operations pass; existing executor behavior was not changed
 
 ## `launch_app`
 
@@ -567,7 +477,7 @@ The exact representative requests were `{"operation":"list_windows"}`, `{"operat
 - Category: clipboard
 - Description: set clipboard
 - Parameters: `text`: <class 'str'>
-- Command: `xclip -selection clipboard`
+- Command: `xclip -selection clipboard -loops 0`
 - Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.
 - Timeout: 10 seconds unless the operation has an explicit timeout parameter.
 - Side effects/security: see registry validation; destructive actions are not undoable.

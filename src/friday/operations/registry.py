@@ -368,7 +368,7 @@ OPERATIONS = {
             "set_clipboard",
             "clipboard",
             SetClipboard,
-            "xclip -selection clipboard",
+            "xclip -selection clipboard -loops 0",
             "changes clipboard",
         ),
         ("get_clipboard", "clipboard", GetClipboard, "xclip -selection clipboard -o", "none"),
