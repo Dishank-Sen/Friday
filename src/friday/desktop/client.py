@@ -13,6 +13,7 @@ from friday.actions.models import (
     LeftClickAction,
     TypeAction,
 )
+from friday.operations.registry import SystemOperation
 from friday.sandbox.base import Sandbox
 
 from .errors import DesktopConnectionError, DesktopRequestError
@@ -70,6 +71,13 @@ class DesktopClient:
             return ActionResult.model_validate(response.json())
         except (TypeError, ValueError) as error:
             raise DesktopRequestError(502, "invalid action response") from error
+
+    def operation(self, operation: SystemOperation) -> dict[str, object]:
+        response = self._request("POST", "/operation", json=operation.model_dump(mode="json"))
+        try:
+            return response.json()
+        except ValueError as error:
+            raise DesktopRequestError(502, "invalid operation response") from error
 
     def click(self, x: int, y: int, button: int = 1) -> None:
         if button != 1:

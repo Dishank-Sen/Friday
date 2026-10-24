@@ -33,7 +33,10 @@ python -m friday up
 python -m friday status
 python -m friday screenshot out.png
 python -m friday act '{"action":"left_click","x":100,"y":100}'
+python -m friday act '{"action":"shortcut","name":"browser_new_tab"}'
 python -m friday act '{"action":"screenshot"}' --screenshot out.png
+python -m friday operation '{"operation":"list_windows"}'
+python -m friday operation '{"operation":"open_url","url":"https://example.com"}'
 python -m friday locate "open the terminal" --image s.png --annotate result.png
 python -m friday down
 ```
@@ -77,7 +80,7 @@ tests/        Unit and opt-in integration tests
 
 Actions are a shared Pydantic discriminated union on `action`: clicks, drag, move,
 mouse down/up, scroll, type, key, held key, wait, screenshot, cursor position, and
-host-only zoom. Coordinates are integer X11 pixels. Server failures return a clear
+host-only zoom, plus named shortcuts. Coordinates are integer X11 pixels. Server failures return a clear
 HTTP error including command stderr; client failures raise `DesktopError` subclasses.
 
 `RemoteExecutor` sends server actions via `DesktopClient`. `zoom` is deliberately
