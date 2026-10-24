@@ -23,7 +23,7 @@ graph TD;
 	guard -.-> build_context;
 	guard -.-> executor;
 	guard -.-> finish;
-	observe --> decide;
+	observe --> build_context;
 	settle --> verify;
 	verify --> build_context;
 	finish --> __end__;

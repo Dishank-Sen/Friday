@@ -6,7 +6,7 @@ This package defines only the future agent loop topology. Every default node is 
 
 ```mermaid
 flowchart LR
-    START --> observe --> decide
+    START --> observe --> build_context --> decide
     decide -->|action| guard
     decide -->|done / fail| finish
     decide -->|retry| build_context
@@ -21,14 +21,16 @@ flowchart LR
 
 | Field | Read by | Written by |
 | --- | --- | --- |
-| `goal` | decide, build_context, finish | caller |
+| `goal` | build_context, finish | caller |
 | `status` | finish | caller, finish |
 | `step`, `max_steps`, `started_at` | guard, finish | caller, guard |
 | `screenshot_path`, `prev_screenshot_path` | decide, settle, verify | observe, settle |
+| `prompt` | decide | build_context only |
+| `screen_size`, `windows` | build_context, guard, settle | observe, settle |
 | `decision`, `pending_action`, `retries` | route_after_decide, guard | decide |
 | `guard_verdict` | route_after_guard | guard |
 | `last_result` | settle, verify, build_context, finish | executor |
-| `history`, `hint`, `stuck_count` | decide, guard, build_context, finish | decide, guard, verify, build_context |
+| `history`, `hint`, `stuck_count` | guard, build_context, finish | decide, guard, verify, build_context |
 | `final_report` | caller | finish |
 
 `initial_state(goal, max_steps)` supplies neutral values. The default LangGraph recursion limit is in `harness.config`.
@@ -37,16 +39,20 @@ flowchart LR
 
 | Node | Reads | Future writes | Next |
 | --- | --- | --- | --- |
-| observe | goal | screenshot_path | decide |
-| decide | goal, screenshot paths, history, hint, retries | decision, pending_action, retries | route_after_decide |
-| guard | pending_action, budgets, history, stuck_count | guard_verdict, hint, stuck_count | route_after_guard |
+| observe | goal | screenshot_path, screen_size, windows | build_context |
+| decide | prompt, screenshot_path, static system prompt dependency | decision, pending_action, retries, hint | route_after_decide |
+| guard | pending_action, screen_size, budgets, history, stuck_count | guard_verdict, hint, stuck_count | route_after_guard |
 | executor | pending_action | last_result | settle |
-| settle | screenshot_path, last_result | prev_screenshot_path, screenshot_path | verify |
+| settle | screenshot_path, last_result | prev_screenshot_path, screenshot_path, screen_size, windows | verify |
 | verify | screenshot paths, last_result | hint, stuck_count | build_context |
-| build_context | goal, history, last_result, hint | history | decide |
+| build_context | goal, screen_size, windows, history, last_result, hint, step, max_steps | prompt, hint | decide |
 | finish | all terminal context | status, final_report | END |
 
 Expected execution failures belong in `last_result` with `ok: false`; they do not raise. Only routing reads `decision` or `guard_verdict`: `None` logs a warning and goes to finish, while an unknown value raises `ValueError`.
+
+## Prompt flow
+
+The static system prompt is identical for each call and will be injected into `decide` as a dependency when model wiring is added; it is not state. `build_context` creates the complete dynamic prompt in `state["prompt"]` from current facts and is the only node allowed to write that field. Other nodes write facts such as `hint` and `last_result`, never prompt text. `build_context` folds a hint into the prompt and clears it afterward.
 
 ## Routing tables
 

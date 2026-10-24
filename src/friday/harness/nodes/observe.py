@@ -10,6 +10,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 def observe(state: AgentState) -> dict:
-    """Capture the first screenshot only; this stub performs no observation or file access."""
+    """Capture first screenshot, screen size, and windows only; this stub writes no prompt."""
     LOGGER.info("harness observe stub ran")
     return {}

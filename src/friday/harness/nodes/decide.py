@@ -10,6 +10,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 def decide(state: AgentState) -> dict:
-    """Build/call/parse the model, set decision/action, and own retries; this is a no-op."""
+    """Read prompt/screenshot, call/validate model, and set decision/action/retry; no-op here."""
     LOGGER.info("harness decide stub ran")
     return {}
