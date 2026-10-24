@@ -9,6 +9,8 @@ RUN apt-get update \
         python3-venv \
         scrot \
         xdotool \
+        wmctrl \
+        xclip \
     && python3 -m venv /opt/friday/venv \
     && /opt/friday/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
     && rm -rf /var/lib/apt/lists/* /tmp/requirements.txt

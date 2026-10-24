@@ -17,6 +17,7 @@ from friday.executor.remote import RemoteExecutor
 from friday.graph.locate import LocateRunner
 from friday.llm import LLMError, create_llm
 from friday.llm.config import LLMSettings
+from friday.operations.registry import parse_operation
 from friday.sandbox.docker_sandbox import DockerSandbox
 from friday.vision.annotate import annotate_crosshair
 
@@ -40,6 +41,8 @@ def _parser() -> argparse.ArgumentParser:
     act = subparsers.add_parser("act")
     act.add_argument("payload", help="JSON action object")
     act.add_argument("--screenshot", type=Path, metavar="OUTPUT")
+    operation = subparsers.add_parser("operation")
+    operation.add_argument("payload", help="JSON system operation object")
     locate = subparsers.add_parser("locate")
     locate.add_argument("instruction")
     source = locate.add_mutually_exclusive_group(required=True)
@@ -115,6 +118,8 @@ def main() -> int:
             return 0
         if args.command == "act":
             return _act(args, sandbox)
+        if args.command == "operation":
+            return _operation(args, sandbox)
         with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as desktop:
             args.output.write_bytes(desktop.screenshot())
         print(f"Screenshot saved to {args.output}")
@@ -167,6 +172,15 @@ def _act(args: argparse.Namespace, sandbox: DockerSandbox) -> int:
         print(f"Point: {result.point[0]}, {result.point[1]}")
     if args.screenshot:
         print(f"Screenshot saved to {args.screenshot}")
+    return 0
+
+
+def _operation(args: argparse.Namespace, sandbox: DockerSandbox) -> int:
+    payload = json.loads(args.payload)
+    with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as client:
+        operation = parse_operation(payload, Path("/config/friday-workspace"))
+        result = client.operation(operation)
+    print(json.dumps(result, sort_keys=True))
     return 0
 
 

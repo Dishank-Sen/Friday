@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from friday.actions.keys import normalize_key
 from friday.actions.models import (
     Action,
@@ -14,6 +16,7 @@ from friday.actions.models import (
     TripleClickAction,
     TypeAction,
 )
+from friday.operations.registry import SystemOperation, _argv
 
 
 def move_command(x: int, y: int) -> list[str]:
@@ -90,3 +93,8 @@ def commands_for_action(action: Action) -> list[list[str]]:
             return commands + scroll_commands(scroll)
         case _:
             return []
+
+
+def command_for_operation(operation: SystemOperation, workspace: Path) -> list[str] | None:
+    """Return the fixed argv for a validated system operation."""
+    return _argv(operation, workspace)

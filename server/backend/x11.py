@@ -20,6 +20,7 @@ from friday.actions.models import (
     WaitAction,
     ZoomAction,
 )
+from friday.operations.registry import SystemOperation
 
 from .base import BackendError
 from .commands import (
@@ -31,17 +32,29 @@ from .commands import (
     move_command,
 )
 from .runner import CommandRunner
+from .system import SystemBackend
 
 LOGGER = logging.getLogger(__name__)
 
 
 class X11Backend:
-    def __init__(self, runner: CommandRunner) -> None:
+    def __init__(
+        self, runner: CommandRunner, workspace: Path = Path("/config/friday-workspace")
+    ) -> None:
         self._runner = runner
         self._lock = threading.RLock()
         self._held_buttons: set[int] = set()
         self._held_keys: set[str] = set()
+        self._system = SystemBackend(runner, workspace)
         self.release_all()
+
+    def execute_operation(self, operation: SystemOperation) -> dict[str, object]:
+        with self._lock:
+            return self._system.execute(operation)
+
+    @property
+    def workspace(self) -> Path:
+        return self._system.workspace
 
     def execute(self, action: Action) -> ActionResult:
         started = time.monotonic()

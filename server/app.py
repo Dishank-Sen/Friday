@@ -6,12 +6,14 @@ import hmac
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from pydantic import ValidationError
 
 from friday.actions.models import ActionResult, parse_action
+from friday.operations.registry import OperationError, parse_operation
 from server.backend.base import BackendError, DesktopBackend
 from server.backend.runner import SubprocessRunner
 from server.backend.x11 import X11Backend
@@ -23,7 +25,9 @@ DEFAULT_DISPLAY = ":1"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    backend = X11Backend(SubprocessRunner(os.environ.get(DISPLAY_ENV, DEFAULT_DISPLAY)))
+    workspace = Path(os.environ.get("FRIDAY_WORKSPACE", "/config/friday-workspace"))
+    workspace.mkdir(parents=True, exist_ok=True)
+    backend = X11Backend(SubprocessRunner(os.environ.get(DISPLAY_ENV, DEFAULT_DISPLAY)), workspace)
     app.state.backend = backend
     try:
         yield
@@ -102,5 +106,19 @@ def action(payload: dict[str, object]) -> ActionResult:
         ) from error
     try:
         return _backend().execute(desktop_action)
+    except BackendError as error:
+        raise _backend_error(error) from error
+
+
+@app.post("/operation", dependencies=[Depends(require_auth)])
+def operation(payload: dict[str, object]) -> dict[str, object]:
+    try:
+        system_operation = parse_operation(payload, _backend().workspace)
+    except (OperationError, ValidationError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    try:
+        return _backend().execute_operation(system_operation)
     except BackendError as error:
         raise _backend_error(error) from error
