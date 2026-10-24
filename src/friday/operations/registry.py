@@ -382,3 +382,44 @@ OPERATIONS = {
         ("delete_file", "files", DeleteFile, "pathlib.Path.unlink/rmtree", "deletes file"),
     ]
 }
+
+# Existing action operations are documented from this same module, but retain their
+# established action-model parsing and backend behavior.
+INPUT_OPERATIONS = {
+    name: (category, argv, description)
+    for name, category, argv, description in [
+        ("left_click", "input", "xdotool mousemove x y; xdotool click 1", "left click"),
+        ("right_click", "input", "xdotool mousemove x y; xdotool click 3", "right click"),
+        ("middle_click", "input", "xdotool mousemove x y; xdotool click 2", "middle click"),
+        (
+            "double_click",
+            "input",
+            "xdotool mousemove x y; xdotool click --repeat 2 --delay 100 1",
+            "double click",
+        ),
+        (
+            "triple_click",
+            "input",
+            "xdotool mousemove x y; xdotool click --repeat 3 --delay 100 1",
+            "triple click",
+        ),
+        (
+            "left_click_drag",
+            "input",
+            "xdotool mousemove/mousedown/mouseup",
+            "interpolated left drag",
+        ),
+        ("mouse_move", "input", "xdotool mousemove x y", "move cursor"),
+        ("left_mouse_down", "input", "xdotool mousedown 1", "hold left button"),
+        ("left_mouse_up", "input", "xdotool mouseup 1", "release left button"),
+        ("scroll", "input", "xdotool click 4/5/6/7", "scroll"),
+        ("type", "input", "xdotool type --delay 20 -- text", "type text"),
+        ("key", "input", "xdotool key -- key", "send key"),
+        ("hold_key", "input", "xdotool keydown/keyup -- key", "hold key"),
+        ("wait", "input", "Python time.sleep", "wait"),
+        ("screenshot", "observation", "scrot -- path", "capture PNG"),
+        ("cursor_position", "observation", "xdotool getmouselocation --shell", "read cursor"),
+        ("screen_size", "observation", "xdotool getdisplaygeometry", "read screen size"),
+        ("zoom", "observation", "Pillow crop and resize", "host-only zoom"),
+    ]
+}
