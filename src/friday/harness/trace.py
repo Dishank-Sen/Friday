@@ -23,8 +23,8 @@ class ObservationTraceWriter:
             "screen_size": observation.screen_size,
             "windows": [window.model_dump() for window in observation.windows],
             "focused_app": observation.focused_app,
-            "capture_error": error,
-            "captured_at": monotonic(),
+            "capture_error": error or observation.capture_error,
+            "timings": {"captured_at": monotonic()},
         }
         (self._trace_dir / "observation.json").write_text(json.dumps(payload), encoding="utf-8")
         return str(screenshot_path)

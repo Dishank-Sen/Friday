@@ -45,6 +45,7 @@ def test_observe_writes_only_observation_fields_and_safe_trace(tmp_path: Path) -
     observation_json = (tmp_path / "observation.json").read_text(encoding="utf-8")
     assert "prompt" not in observation_json
     assert "screenshot_png" not in observation_json
+    assert '"timings"' in observation_json
 
 
 def test_observe_retries_once_then_fails() -> None:
@@ -68,3 +69,15 @@ def test_observe_keeps_nonfatal_empty_windows_from_client(tmp_path: Path) -> Non
 
     assert update["windows"] == []
     assert update["screenshot_path"]
+
+
+def test_observe_traces_nonfatal_window_capture_error(tmp_path: Path) -> None:
+    observation = _observation([])
+    observation.capture_error = "wmctrl unavailable"
+    node = make_observe(
+        FakeClient([observation]), ObservationTraceWriter(tmp_path), focused_app_for
+    )
+
+    node(initial_state("goal", 1))
+
+    assert "wmctrl unavailable" in (tmp_path / "observation.json").read_text(encoding="utf-8")

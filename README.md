@@ -77,6 +77,8 @@ tests/        Unit and opt-in integration tests
 - `GET /screenshot` returns PNG bytes.
 - `GET /screen_size` returns the current display dimensions.
 - `GET /cursor` returns the current cursor point.
+- `GET /observation` returns one locked screenshot/window/focus snapshot.
+- `GET /active_window` returns the fresh focused-window metadata used by shortcuts.
 - `POST /action` accepts one validated typed desktop action.
 
 Actions are a shared Pydantic discriminated union on `action`: clicks, drag, move,
@@ -90,9 +92,11 @@ host-only: it crops and enlarges a PNG using Pillow and returns `ZoomView`, whos
 
 ## Agent harness skeleton
 
-The future agent decision-loop topology is isolated in `friday.harness`. Its default
-nodes are safe no-op stubs; they do not call models, the executor, or the sandbox.
-See [the harness design](docs/harness.md) for its state, routes, and replacement pattern.
+The future agent decision-loop topology is isolated in `friday.harness`. All nodes
+except an injected initial observation implementation are safe no-op stubs; none call
+models or the executor. See [the harness design](docs/harness.md) and
+[observation contract](docs/observation.md) for state, routes, safe captured data,
+and the replacement pattern.
 
 ## Lifecycle and display settings
 

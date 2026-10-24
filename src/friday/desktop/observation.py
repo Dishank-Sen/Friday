@@ -42,6 +42,7 @@ class Observation(BaseModel):
     active_window_id: str | None
     active_window_class: str | None
     focused_app: str
+    capture_error: str | None = None
 
     @field_serializer("screenshot_png", when_used="json")
     def _serialize_screenshot(self, image: bytes) -> str:
@@ -60,6 +61,7 @@ def capture_observation(
     screen_size_output: str,
     windows_output: str,
     active_window_output: str,
+    capture_error: str | None = None,
 ) -> Observation:
     """Parse a coherent X11 command snapshot into safe observation data."""
     screen_size = _screen_size(screen_size_output)
@@ -73,6 +75,7 @@ def capture_observation(
         active_window_id=active_window_id,
         active_window_class=None if active is None else active.class_name,
         focused_app=focused_app_for(None if active is None else active.class_name),
+        capture_error=capture_error,
     )
 
 

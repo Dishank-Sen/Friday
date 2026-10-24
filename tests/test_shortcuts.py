@@ -17,6 +17,21 @@ def test_shortcut_registry_has_unique_names_and_valid_bindings() -> None:
                 assert all(normalize_key(key) for key in keys)
 
 
+@pytest.mark.parametrize("name", SHORTCUTS)
+@pytest.mark.parametrize("focused_app", FOCUSED_APPS)
+def test_every_logical_shortcut_has_a_defined_focus_resolution(
+    name: str, focused_app: str
+) -> None:
+    try:
+        keys = resolve_shortcut(name, focused_app)
+    except ShortcutNotAvailable as error:
+        assert error.name == name
+        assert error.focused_app == focused_app
+        assert error.available_contexts
+    else:
+        assert keys
+
+
 @pytest.mark.parametrize(
     "focused_app, expected",
     [("terminal", ["ctrl+shift+c"]), ("browser", ["ctrl+c"]), ("other", ["ctrl+c"])],

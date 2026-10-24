@@ -6,7 +6,9 @@ This package defines only the future agent loop topology. Every default node is 
 
 ```mermaid
 flowchart LR
-    START --> observe --> build_context --> decide
+    START --> observe
+    observe -->|running| build_context --> decide
+    observe -->|failed| finish
     decide -->|action| guard
     decide -->|done / fail| finish
     decide -->|retry| build_context
@@ -26,7 +28,8 @@ flowchart LR
 | `step`, `max_steps`, `started_at` | guard, finish | caller, guard |
 | `screenshot_path`, `prev_screenshot_path` | decide, settle, verify | observe, settle |
 | `prompt` | decide | build_context only |
-| `screen_size`, `windows` | build_context, guard, settle | observe, settle |
+| `screen_size` | guard, settle | observe, settle |
+| `windows`, `focused_app` | build_context, guard, settle | observe, settle |
 | `decision`, `pending_action`, `retries` | route_after_decide, guard | decide |
 | `guard_verdict` | route_after_guard | guard |
 | `last_result` | settle, verify, build_context, finish | executor |
@@ -39,11 +42,11 @@ flowchart LR
 
 | Node | Reads | Future writes | Next |
 | --- | --- | --- | --- |
-| observe | goal | screenshot_path, screen_size, windows | build_context |
+| observe | nothing | screenshot_path, screen_size, windows, focused_app; on fatal capture failure status, final_report | route_after_observe |
 | decide | prompt, screenshot_path, static system prompt dependency | decision, pending_action, retries, hint | route_after_decide |
 | guard | pending_action, screen_size, budgets, history, stuck_count | guard_verdict, hint, stuck_count | route_after_guard |
 | executor | pending_action | last_result | settle |
-| settle | screenshot_path, last_result | prev_screenshot_path, screenshot_path, screen_size, windows | verify |
+| settle | screenshot_path, last_result | prev_screenshot_path, screenshot_path, screen_size, windows, focused_app | verify |
 | verify | screenshot paths, last_result | hint, stuck_count | build_context |
 | build_context | goal, screen_size, windows, history, last_result, hint, step, max_steps | prompt, hint | decide |
 | finish | all terminal context | status, final_report | END |
@@ -52,12 +55,16 @@ Expected execution failures belong in `last_result` with `ok: false`; they do no
 
 ## Prompt flow
 
-The static system prompt is identical for each call and will be injected into `decide` as a dependency when model wiring is added; it is not state. `build_context` creates the complete dynamic prompt in `state["prompt"]` from current facts and is the only node allowed to write that field. Other nodes write facts such as `hint` and `last_result`, never prompt text. `build_context` folds a hint into the prompt and clears it afterward.
+The static system prompt is identical for each call and will be injected into `decide` as a dependency when model wiring is added; it is not state. `build_context` creates the complete dynamic prompt in `state["prompt"]` from current facts and is the only node allowed to write that field. Other nodes write facts such as `hint` and `last_result`, never prompt text. `screen_size` is internal coordinate/bounds data and must never be rendered into a prompt. `build_context` folds a hint into the prompt and clears it afterward.
+
+`observe` is the only implemented node: an injected desktop client collects the initial screenshot and safe system data, then an injected trace writer stores the screenshot and safe observation metadata. It does not build a prompt. Shortcut execution later resolves bindings against a fresh active-window lookup; a future guard may call the same resolver to reject unavailable shortcuts, and a future context builder may render only shortcuts available for `focused_app`.
 
 ## Routing tables
 
 | From | Value | Destination |
 | --- | --- | --- |
+| observe | `status == failed` | finish |
+| observe | any other status | build_context |
 | decide | action | guard |
 | decide | done, fail | finish |
 | decide | retry | build_context |

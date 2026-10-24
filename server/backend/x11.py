@@ -123,14 +123,18 @@ class X11Backend:
         with self._lock:
             screenshot = self.screenshot()
             screen_size = self._runner.run(["xdotool", "getdisplaygeometry"])
+            capture_error = None
             try:
                 windows = self._runner.run(["wmctrl", "-lpGx"])
                 active = self._runner.run(["xdotool", "getactivewindow"])
-            except BackendError:
+            except BackendError as error:
                 LOGGER.warning("window observation failed", exc_info=True)
                 windows, active = "", ""
+                capture_error = str(error)
             try:
-                return capture_observation(screenshot, screen_size, windows, active)
+                return capture_observation(
+                    screenshot, screen_size, windows, active, capture_error=capture_error
+                )
             except ValueError as error:
                 raise BackendError(str(error)) from error
 

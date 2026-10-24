@@ -1,16 +1,21 @@
-"""Generate docs/keybinding.md from the shortcut registry."""
+"""Generate docs/keybinding.md from the focus-aware shortcut registry."""
 
 # ruff: noqa: E501
 
 from __future__ import annotations
 
+import sys
 from collections import defaultdict
 from pathlib import Path
 
-from friday.shortcuts.registry import SHORTCUTS, ShortcutDefinition
-
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "keybinding.md"
+_APPS = ("browser", "terminal", "file_manager", "text_editor", "other")
+
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+
+from friday.shortcuts.registry import ALIASES, SHORTCUTS, ShortcutDefinition  # noqa: E402
 
 
 def render() -> str:
@@ -19,12 +24,12 @@ def render() -> str:
         "",
         "## Overview",
         "",
-        '`shortcut` is a named Friday action: `{"action":"shortcut","name":"browser_focus_address_bar"}`. Names map to validated xdotool key syntax in the registry, so an agent does not need to emit raw key strings for common operations. Keystrokes are delivered to the currently focused X11 window; every entry therefore states its required focus.',
+        '`shortcut` is a named action: `{"action":"shortcut","name":"copy"}`. Logical names resolve against a fresh active-window lookup immediately before key injection, so the agent does not need to emit raw keys. `default` bindings apply to any focused app without an explicit binding; an explicit `n/a` does not fall back. Deprecated aliases remain accepted for compatibility.',
         "",
-        "## Summary",
+        "## Binding matrix",
         "",
-        "| Name | Keys | Context | Requires focus | Status |",
-        "| --- | --- | --- | --- | --- |",
+        "| Name | Browser | Terminal | File manager | Text editor | Other | Status |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for shortcut in SHORTCUTS.values():
         lines.append(_summary(shortcut))
@@ -37,56 +42,65 @@ def render() -> str:
             lines.extend(_entry(shortcut))
     lines.extend(
         [
+            "## Deprecated aliases",
+            "",
+            "| Alias | Logical name |",
+            "| --- | --- |",
+            *[f"| `{alias}` | `{name}` |" for alias, name in ALIASES.items()],
+            "",
             "## Same keys, different contexts",
             "",
-            "| Keys | Context-dependent meaning |",
+            "| Keys | Meaning |",
             "| --- | --- |",
-            "| `ctrl+c` | `text_copy` copies GUI text; `terminal_interrupt` sends SIGINT. |",
-            "| `ctrl+l` | Browser address bar, terminal clear, and Thunar location entry. |",
-            "| `ctrl+shift+c` | Terminal copy; use `text_copy` for ordinary GUI text. |",
+            "| `ctrl+c` | `copy` normally copies; `terminal_interrupt` sends SIGINT. |",
+            "| `ctrl+l` | Browser address bar, terminal clear, and file-manager location entry. |",
+            "| `ctrl+shift+c` | `copy` in a terminal. |",
             "",
             "## Gaps",
             "",
-            "No custom XFCE keybindings were created. Operations without a reliable default binding should use the direct commands in `docs/operations.md`; a later container-init script may define custom bindings if needed.",
+            "No custom XFCE keybindings are created. Unavailable shortcuts return a helpful failure; use direct operations from `docs/operations.md` until a later container-init task adds a custom binding.",
             "",
             "## Known issues",
             "",
-            "The browser viewer can consume browser and common editing shortcuts when pressed manually in the host browser. That does not affect `xdotool`, which injects into X11. This xdotool version has no `getwindowclassname` or `getwindowclass` command; `xprop WM_CLASS` and `wmctrl -lx` were used instead. `window_show_desktop` may expose XFCE's application finder rather than only hiding windows.",
+            "The browser viewer can swallow shortcuts pressed manually in the host browser; xdotool injection into X11 is unaffected. Entries marked unverified need an objective or visual check in the current image.",
             "",
             "## Adding a shortcut",
             "",
-            "Add one `ShortcutDefinition` in `friday.shortcuts.registry`, ensure all key strings normalize through `keys.py`, add tests, run `python scripts/gen_keybinding_doc.py`, and commit the generated document.",
+            "Add one logical registry entry with bindings, test all focused-app resolutions, run `python scripts/gen_keybinding_doc.py`, and commit this generated document.",
             "",
         ]
     )
     return "\n".join(lines)
 
 
+def _binding(shortcut: ShortcutDefinition, focused_app: str) -> str:
+    if focused_app in shortcut.bindings:
+        keys = shortcut.bindings[focused_app]
+    else:
+        keys = shortcut.bindings.get("default")
+    return "n/a" if keys is None else ", ".join(keys)
+
+
 def _summary(shortcut: ShortcutDefinition) -> str:
-    return f"| `{shortcut.name}` | `{', '.join(shortcut.keys)}` | {shortcut.context} | `{shortcut.requires_focus}` | {shortcut.status} |"
+    values = " | ".join(f"`{_binding(shortcut, app)}`" for app in _APPS)
+    return f"| `{shortcut.name}` | {values} | {shortcut.status} |"
 
 
 def _entry(shortcut: ShortcutDefinition) -> list[str]:
-    evidence = (
-        "Executed 2026-10-24 with `POST /action` and returned HTTP 200; "
-        f"visual evidence: `docs/assets/keybindings/{shortcut.context}/after.png`. "
-        "Visual/objective per-shortcut effect still needs confirmation."
-    )
+    bindings = ", ".join(f"{app}: {_binding(shortcut, app)}" for app in _APPS)
     return [
         f"### `{shortcut.name}`",
         "",
         f"- Description: {shortcut.description}",
-        f"- Keys: `{', '.join(shortcut.keys)}`",
-        f"- Requires focus: `{shortcut.requires_focus}`",
+        f"- Bindings: {bindings}",
         f"- Expected effect: {shortcut.expected_effect}",
         f"- Caveats: {shortcut.caveats or 'None.'}",
         f"- Risk flag: {'risky' if shortcut.risky else 'not risky'}",
         f"- Status: {shortcut.status}",
-        f"- Verification evidence: {evidence}",
+        f"- Verification evidence: {shortcut.evidence}",
         "",
     ]
 
 
 if __name__ == "__main__":
-    OUTPUT.parent.mkdir(exist_ok=True)
     OUTPUT.write_text(render(), encoding="utf-8")

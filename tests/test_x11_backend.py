@@ -111,6 +111,16 @@ def test_shortcut_uses_fresh_terminal_focus() -> None:
     assert ["xdotool", "key", "--", "ctrl+shift+c"] in runner.commands
 
 
+def test_shortcut_uses_fresh_browser_focus() -> None:
+    runner = FakeRunner(pause=False, active_class="chromium.Chromium")
+    backend = X11Backend(runner)
+
+    result = backend.execute(ShortcutAction(action="shortcut", name="copy"))
+
+    assert result.ok
+    assert ["xdotool", "key", "--", "ctrl+c"] in runner.commands
+
+
 def test_unavailable_shortcut_returns_failed_result() -> None:
     runner = FakeRunner(pause=False, active_class="other.Other")
     backend = X11Backend(runner)
