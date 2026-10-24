@@ -13,10 +13,12 @@ from friday.actions.models import (
     MiddleClickAction,
     RightClickAction,
     ScrollAction,
+    ShortcutAction,
     TripleClickAction,
     TypeAction,
 )
 from friday.operations.registry import SystemOperation, _argv
+from friday.shortcuts.registry import normalized_keys, resolve_shortcut
 
 
 def move_command(x: int, y: int) -> list[str]:
@@ -88,6 +90,9 @@ def commands_for_action(action: Action) -> list[list[str]]:
             return type_commands(text)
         case KeyAction(key=key):
             return [key_command(key)]
+        case ShortcutAction(name=name, repeat=repeat):
+            keys = normalized_keys(resolve_shortcut(name))
+            return [key_command(key) for _ in range(repeat) for key in keys]
         case ScrollAction() as scroll:
             commands = [] if scroll.x is None else [move_command(scroll.x, scroll.y)]
             return commands + scroll_commands(scroll)

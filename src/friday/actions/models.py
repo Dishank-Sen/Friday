@@ -15,6 +15,8 @@ from pydantic import (
     model_validator,
 )
 
+from friday.shortcuts.registry import resolve_shortcut
+
 from .config import (
     MAX_HOLD_SECONDS,
     MAX_MOUSE_MOVE_SECONDS,
@@ -126,6 +128,18 @@ class HoldKeyAction(_Action):
         return normalize_key(value)
 
 
+class ShortcutAction(_Action):
+    action: Literal["shortcut"]
+    name: str
+    repeat: int = Field(default=1, ge=1, le=10)
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        resolve_shortcut(value)
+        return value
+
+
 class WaitAction(_Action):
     action: Literal["wait"]
     seconds: float = Field(default=1.0, gt=0, le=MAX_WAIT_SECONDS)
@@ -161,6 +175,7 @@ Action = Annotated[
         | TypeAction
         | KeyAction
         | HoldKeyAction
+        | ShortcutAction
         | WaitAction
         | ScreenshotAction
         | CursorPositionAction
