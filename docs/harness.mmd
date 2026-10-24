@@ -1,0 +1,32 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	observe(observe)
+	decide(decide)
+	guard(guard)
+	executor(executor)
+	settle(settle)
+	verify(verify)
+	build_context(build_context)
+	finish(finish)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> observe;
+	build_context --> decide;
+	decide -.-> build_context;
+	decide -.-> finish;
+	decide -.-> guard;
+	executor --> settle;
+	guard -.-> build_context;
+	guard -.-> executor;
+	guard -.-> finish;
+	observe --> decide;
+	settle --> verify;
+	verify --> build_context;
+	finish --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

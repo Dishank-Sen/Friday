@@ -10,6 +10,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 def guard(state: AgentState) -> dict:
-    """Validate actions and budgets; this stub performs no validation or approval decision."""
+    """Validate action/bounds/budgets/repeats/kill switch and set a verdict; no-op here."""
     LOGGER.info("harness guard stub ran")
     return {}

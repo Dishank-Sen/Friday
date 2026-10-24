@@ -10,6 +10,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 def settle(state: AgentState) -> dict:
-    """Wait for screen stability and capture a screenshot; this stub performs neither."""
+    """Wait for stability, rotate screenshot paths, and capture; this stub is a no-op."""
     LOGGER.info("harness settle stub ran")
     return {}

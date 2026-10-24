@@ -88,6 +88,12 @@ HTTP error including command stderr; client failures raise `DesktopError` subcla
 host-only: it crops and enlarges a PNG using Pillow and returns `ZoomView`, whose
 `to_screen(x, y)` maps a zoomed-image point back to a real display pixel.
 
+## Agent harness skeleton
+
+The future agent decision-loop topology is isolated in `friday.harness`. Its default
+nodes are safe no-op stubs; they do not call models, the executor, or the sandbox.
+See [the harness design](docs/harness.md) for its state, routes, and replacement pattern.
+
 ## Lifecycle and display settings
 
 `DockerSandbox` uses the official Docker Python SDK. It builds `friday-webtop:local` when that image is missing (or when rebuild is requested), binds the viewer and API to `127.0.0.1`, and creates a fresh random control token for each new sandbox. If a container with the configured name already exists, Friday force-removes it and starts a replacement; this avoids attaching a new token to an old service. `down` force-removes the named container.

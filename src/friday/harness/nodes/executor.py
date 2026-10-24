@@ -10,6 +10,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 def executor(state: AgentState) -> dict:
-    """Run the pending action and record its result; this stub performs no execution."""
+    """Run pending action and record expected failures in last_result; this stub is a no-op."""
     LOGGER.info("harness executor stub ran")
     return {}
