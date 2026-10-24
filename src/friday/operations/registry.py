@@ -277,7 +277,7 @@ def _argv(op: SystemOperation, workspace: Path) -> list[str] | None:
         case WaitForWindow(title=title):
             return ["xdotool", "search", "--sync", "--onlyvisible", "--name", title]
         case SetClipboard():
-            return ["xclip", "-selection", "clipboard", "-loops", "1"]
+            return ["xclip", "-selection", "clipboard", "-loops", "0"]
         case GetClipboard():
             return ["xclip", "-selection", "clipboard", "-o"]
         case IsRunning(name=name):
