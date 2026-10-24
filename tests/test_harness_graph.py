@@ -31,10 +31,14 @@ def _nodes(calls: list[str], decide: Node, guard: Node | None = None) -> Nodes:
     )
 
 
-def test_default_stubs_finish_when_decision_is_missing() -> None:
-    result = build_graph().invoke(initial_state("goal", 1))
+def test_default_stubs_build_context_before_finishing_on_missing_decision() -> None:
+    calls: list[str] = []
+    graph = build_graph(_nodes(calls, _node("decide", calls)))
+
+    result = graph.invoke(initial_state("goal", 1))
 
     assert result["decision"] is None
+    assert calls == ["observe", "build_context", "decide", "finish"]
 
 
 @pytest.mark.parametrize("decision", ["done", "fail"])
@@ -44,7 +48,7 @@ def test_terminal_decisions_go_directly_to_finish(decision: str) -> None:
 
     graph.invoke(initial_state("goal", 1))
 
-    assert calls == ["observe", "decide", "finish"]
+    assert calls == ["observe", "build_context", "decide", "finish"]
 
 
 def test_allowed_action_runs_full_cycle_then_decides_again() -> None:
@@ -61,6 +65,7 @@ def test_allowed_action_runs_full_cycle_then_decides_again() -> None:
 
     assert calls == [
         "observe",
+        "build_context",
         "decide",
         "guard",
         "executor",
@@ -84,7 +89,15 @@ def test_rejected_guard_rebuilds_context_then_decides() -> None:
 
     graph.invoke(initial_state("goal", 1))
 
-    assert calls == ["observe", "decide", "guard", "build_context", "decide", "finish"]
+    assert calls == [
+        "observe",
+        "build_context",
+        "decide",
+        "guard",
+        "build_context",
+        "decide",
+        "finish",
+    ]
 
 
 def test_stopped_guard_finishes() -> None:
@@ -99,7 +112,7 @@ def test_stopped_guard_finishes() -> None:
 
     graph.invoke(initial_state("goal", 1))
 
-    assert calls == ["observe", "decide", "guard", "finish"]
+    assert calls == ["observe", "build_context", "decide", "guard", "finish"]
 
 
 def test_retry_rebuilds_context_then_decides() -> None:
@@ -112,7 +125,7 @@ def test_retry_rebuilds_context_then_decides() -> None:
 
     build_graph(_nodes(calls, decide)).invoke(initial_state("goal", 1))
 
-    assert calls == ["observe", "decide", "build_context", "decide", "finish"]
+    assert calls == ["observe", "build_context", "decide", "build_context", "decide", "finish"]
 
 
 @pytest.mark.parametrize(("field", "value"), [("decision", "bad"), ("guard_verdict", "bad")])
@@ -158,7 +171,7 @@ def test_topology_matches_expected_nodes_and_edges() -> None:
     }
     assert edges == {
         ("__start__", "observe"),
-        ("observe", "decide"),
+        ("observe", "build_context"),
         ("decide", "guard"),
         ("decide", "finish"),
         ("decide", "build_context"),
@@ -171,6 +184,12 @@ def test_topology_matches_expected_nodes_and_edges() -> None:
         ("build_context", "decide"),
         ("finish", "__end__"),
     }
+
+
+def test_build_context_is_the_only_predecessor_of_decide() -> None:
+    graph = build_graph().get_graph()
+
+    assert {edge.source for edge in graph.edges if edge.target == "decide"} == {"build_context"}
 
 
 def test_replacing_one_node_keeps_default_nodes() -> None:

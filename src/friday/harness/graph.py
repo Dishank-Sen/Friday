@@ -25,7 +25,7 @@ def build_graph(nodes: Nodes | None = None, checkpointer: Any = None) -> Any:
     graph.add_node("build_context", selected.build_context)
     graph.add_node("finish", selected.finish)
     graph.add_edge(START, "observe")
-    graph.add_edge("observe", "decide")
+    graph.add_edge("observe", "build_context")
     graph.add_conditional_edges(
         "decide",
         route_after_decide,
