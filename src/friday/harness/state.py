@@ -13,6 +13,9 @@ class AgentState(TypedDict):
     started_at: float
     screenshot_path: str | None
     prev_screenshot_path: str | None
+    prompt: str | None
+    screen_size: tuple[int, int] | None
+    windows: list[dict]
     decision: Literal["action", "done", "fail", "retry"] | None
     pending_action: dict | None
     guard_verdict: Literal["allow", "reject", "stop"] | None
@@ -34,6 +37,9 @@ def initial_state(goal: str, max_steps: int) -> AgentState:
         "started_at": 0.0,
         "screenshot_path": None,
         "prev_screenshot_path": None,
+        "prompt": None,
+        "screen_size": None,
+        "windows": [],
         "decision": None,
         "pending_action": None,
         "guard_verdict": None,
