@@ -19,7 +19,7 @@ from server.backend.commands import command_for_operation
         ),
         (
             {"operation": "set_clipboard", "text": "-text"},
-            ["xclip", "-selection", "clipboard"],
+            ["xclip", "-selection", "clipboard", "-loops", "1"],
         ),
         (
             {

@@ -30,6 +30,7 @@ class SystemBackend:
         self._runner = runner
         self._workspace = workspace.resolve()
         self._started_pids: set[int] = set()
+        self._clipboard_pid: int | None = None
 
     @property
     def workspace(self) -> Path:
@@ -47,6 +48,7 @@ class SystemBackend:
     def _execute(self, operation: SystemOperation) -> dict[str, object]:
         def path(value: str) -> Path:
             return Path(_path(value, self._workspace))
+
         if isinstance(operation, ReadFile):
             return {"content": path(operation.path).read_text(encoding="utf-8")}
         if isinstance(operation, WriteFile):
@@ -77,8 +79,16 @@ class SystemBackend:
             process = self._runner.start(argv)
             self._started_pids.add(process.pid)
             return {"pid": process.pid}
-        stdin = operation.text if isinstance(operation, SetClipboard) else None
-        output = self._runner.run(argv, stdin=stdin, timeout=getattr(operation, "timeout", 10.0))
+        if isinstance(operation, SetClipboard):
+            if self._clipboard_pid is not None:
+                try:
+                    os.kill(self._clipboard_pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            process = self._runner.start_with_stdin(argv, operation.text)
+            self._clipboard_pid = process.pid
+            return {"ok": True}
+        output = self._runner.run(argv, timeout=getattr(operation, "timeout", 10.0))
         if isinstance(operation, GetClipboard):
             return {"text": output}
         return {"output": output, "ok": True}
