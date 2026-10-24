@@ -22,7 +22,7 @@ Requires-Dist: uvicorn>=0.30.0; extra == "dev"
 Friday provides the environment and model-call layers for a future desktop-operating AI agent. It starts an Ubuntu XFCE desktop in Docker, exposes the desktop in a browser, provides a local authenticated HTTP API for screenshots and mouse and keyboard input, and can ask a vision model to locate a point. It does not yet run an agent loop or click anything from a model result.
 
 ```
-Host Python app / DesktopClient -- HTTP --> control server -- scrot, xdotool --> X display
+Host Python app / RemoteExecutor -- HTTP --> control server -- X11Backend --> X display
           |                                      |
           +-- browser --> Webtop viewer ----------+
 ```
@@ -51,6 +51,8 @@ python -m friday down
 python -m friday up
 python -m friday status
 python -m friday screenshot out.png
+python -m friday act '{"action":"left_click","x":100,"y":100}'
+python -m friday act '{"action":"screenshot"}' --screenshot out.png
 python -m friday locate "open the terminal" --image s.png --annotate result.png
 python -m friday down
 ```
@@ -61,18 +63,20 @@ Host code receives a `Sandbox` and never needs to know whether it is backed by D
 
 ```python
 from friday.desktop.client import DesktopClient
+from friday.executor import RemoteExecutor
+from friday.actions import parse_action
 from friday.sandbox.docker_sandbox import DockerSandbox
 
 with DockerSandbox() as sandbox, DesktopClient(sandbox) as desktop:
-    png = desktop.screenshot()
-    desktop.click(100, 100)
-    desktop.type_text("Hello from Friday")
+    executor = RemoteExecutor(desktop)
+    executor.execute(parse_action('{"action":"left_click","x":100,"y":100}'))
 ```
 
 ## Project structure
 
 ```
 docker/       Custom Webtop image and s6 service
+frontend/     Reserved standalone web-interface project
 server/       FastAPI control service run inside the container
 src/friday/   Host-side configuration, sandbox abstraction, client, and CLI
 src/friday/llm/  Provider-neutral vision LLM interface and Featherless adapter
@@ -87,9 +91,17 @@ tests/        Unit and opt-in integration tests
 
 - `GET /screenshot` returns PNG bytes.
 - `GET /screen_size` returns the current display dimensions.
-- `POST /click` sends a mouse click.
-- `POST /type` types text.
-- `POST /key` sends an xdotool key combination.
+- `GET /cursor` returns the current cursor point.
+- `POST /action` accepts one validated typed desktop action.
+
+Actions are a shared Pydantic discriminated union on `action`: clicks, drag, move,
+mouse down/up, scroll, type, key, held key, wait, screenshot, cursor position, and
+host-only zoom. Coordinates are integer X11 pixels. Server failures return a clear
+HTTP error including command stderr; client failures raise `DesktopError` subclasses.
+
+`RemoteExecutor` sends server actions via `DesktopClient`. `zoom` is deliberately
+host-only: it crops and enlarges a PNG using Pillow and returns `ZoomView`, whose
+`to_screen(x, y)` maps a zoomed-image point back to a real display pixel.
 
 ## Lifecycle and display settings
 
