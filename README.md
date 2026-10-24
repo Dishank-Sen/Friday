@@ -57,6 +57,7 @@ with DockerSandbox() as sandbox, DesktopClient(sandbox) as desktop:
 
 ```
 docker/       Custom Webtop image and s6 service
+frontend/     Reserved standalone web-interface project
 server/       FastAPI control service run inside the container
 src/friday/   Host-side configuration, sandbox abstraction, client, and CLI
 src/friday/llm/  Provider-neutral vision LLM interface and Featherless adapter
