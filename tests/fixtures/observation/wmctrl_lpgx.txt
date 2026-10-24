@@ -1,0 +1,6 @@
+0x01400003 -1 548    0    0    1280 27   xfce4-panel.Xfce4-panel  bfcc6a229b12 xfce4-panel
+0x01200017 -1 563    0    0    1280 720  xfdesktop.Xfdesktop   bfcc6a229b12 Desktop
+0x01600003  0 903    2    75   818  485  xfce4-terminal.Xfce4-terminal  bfcc6a229b12 Terminal - @bfcc6a229b12:/run/s6-rc:s6-rc-init:eeNjIH/servicedirs/custom-svc-friday-control
+0x02e00007  0 918    640  263  640  480  thunar-real.Thunar-real  bfcc6a229b12 friday-workspace - Thunar
+0x02c00003  0 909    2    263  640  480  org.xfce.mousepad.Org.xfce.mousepad  bfcc6a229b12 Untitled 1 - Mousepad
+0x03000002  0 905    10   37   1050 673  chromium (/tmp/friday-chromium-debug).Chromium  bfcc6a229b12 Example Domain - Chromium

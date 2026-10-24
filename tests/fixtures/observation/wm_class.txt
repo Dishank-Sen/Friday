@@ -1,0 +1,6 @@
+0x01400003 WM_CLASS(STRING) = "xfce4-panel", "Xfce4-panel"
+0x01200017 WM_CLASS(STRING) = "xfdesktop", "Xfdesktop"
+0x01600003 WM_CLASS(STRING) = "xfce4-terminal", "Xfce4-terminal"
+0x02e00007 WM_CLASS(STRING) = "thunar-real", "Thunar-real"
+0x02c00003 WM_CLASS(STRING) = "org.xfce.mousepad", "Org.xfce.mousepad"
+0x03000002 WM_CLASS(STRING) = "chromium (/tmp/friday-chromium-debug)", "Chromium"
