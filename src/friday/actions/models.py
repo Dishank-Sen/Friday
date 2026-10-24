@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from friday.shortcuts.registry import resolve_shortcut
+from friday.shortcuts.registry import shortcut_definition
 
 from .config import (
     MAX_HOLD_SECONDS,
@@ -136,7 +136,7 @@ class ShortcutAction(_Action):
     @field_validator("name")
     @classmethod
     def _validate_name(cls, value: str) -> str:
-        resolve_shortcut(value)
+        shortcut_definition(value)
         return value
 
 

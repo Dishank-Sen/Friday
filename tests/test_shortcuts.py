@@ -3,33 +3,44 @@ from pydantic import ValidationError
 
 from friday.actions.keys import normalize_key
 from friday.actions.models import ACTION_ADAPTER, ShortcutAction
-from friday.shortcuts.registry import SHORTCUTS, normalized_keys
-from server.backend.commands import commands_for_action
+from friday.shortcuts.registry import ALIASES, SHORTCUTS, ShortcutNotAvailable, resolve_shortcut
+
+FOCUSED_APPS = ("browser", "terminal", "file_manager", "text_editor", "other")
 
 
-def test_shortcut_registry_is_unique_and_normalizes_all_keys() -> None:
+def test_shortcut_registry_has_unique_names_and_valid_bindings() -> None:
     assert len(SHORTCUTS) == len(set(SHORTCUTS))
-    assert {entry.context for entry in SHORTCUTS.values()} == {
-        "text",
-        "browser",
-        "form",
-        "window",
-        "terminal",
-        "file_manager",
-    }
     for entry in SHORTCUTS.values():
-        assert entry.requires_focus
         assert entry.expected_effect
-        assert normalized_keys(entry) == tuple(normalize_key(key) for key in entry.keys)
+        for keys in entry.bindings.values():
+            if keys is not None:
+                assert all(normalize_key(key) for key in keys)
 
 
-def test_shortcut_action_expands_repeat_through_existing_key_command() -> None:
-    action = ShortcutAction(action="shortcut", name="browser_new_tab", repeat=2)
+@pytest.mark.parametrize(
+    "focused_app, expected",
+    [("terminal", ["ctrl+shift+c"]), ("browser", ["ctrl+c"]), ("other", ["ctrl+c"])],
+)
+def test_copy_resolves_by_focused_app(focused_app: str, expected: list[str]) -> None:
+    assert resolve_shortcut("copy", focused_app) == expected
 
-    assert commands_for_action(action) == [
-        ["xdotool", "key", "--", "ctrl+t"],
-        ["xdotool", "key", "--", "ctrl+t"],
-    ]
+
+def test_explicit_null_does_not_fall_back_to_default() -> None:
+    with pytest.raises(ShortcutNotAvailable, match="undo is available in: default"):
+        resolve_shortcut("undo", "terminal")
+
+
+@pytest.mark.parametrize("name", ["terminal_interrupt", "browser_new_tab", "file_rename"])
+def test_context_only_shortcuts_reject_other_apps(name: str) -> None:
+    with pytest.raises(ShortcutNotAvailable) as error:
+        resolve_shortcut(name, "other")
+    assert error.value.available_contexts
+
+
+@pytest.mark.parametrize("alias, canonical", ALIASES.items())
+def test_deprecated_aliases_resolve(alias: str, canonical: str) -> None:
+    focused_app = "terminal" if alias.startswith("terminal_") else "browser"
+    assert resolve_shortcut(alias, focused_app) == resolve_shortcut(canonical, focused_app)
 
 
 @pytest.mark.parametrize("repeat", [0, 11])
