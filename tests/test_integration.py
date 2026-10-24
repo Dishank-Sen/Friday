@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from friday.actions.models import CursorPositionAction, MouseMoveAction
+from friday.actions.models import CursorPositionAction, MouseMoveAction, ShortcutAction
 from friday.desktop.client import DesktopClient
 from friday.executor.remote import RemoteExecutor
 from friday.operations.registry import parse_operation
@@ -22,5 +22,6 @@ def test_sandbox_serves_a_png() -> None:
         executor = RemoteExecutor(desktop)
         assert executor.execute(MouseMoveAction(action="mouse_move", x=10, y=10)).ok
         assert executor.execute(CursorPositionAction(action="cursor_position")).point == (10, 10)
+        assert executor.execute(ShortcutAction(action="shortcut", name="window_show_desktop")).ok
         operation = parse_operation({"operation": "list_windows"}, Path("/config/friday-workspace"))
         assert "output" in desktop.operation(operation)
