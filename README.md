@@ -34,6 +34,8 @@ python -m friday status
 python -m friday screenshot out.png
 python -m friday act '{"action":"left_click","x":100,"y":100}'
 python -m friday act '{"action":"screenshot"}' --screenshot out.png
+python -m friday operation '{"operation":"list_windows"}'
+python -m friday operation '{"operation":"open_url","url":"https://example.com"}'
 python -m friday locate "open the terminal" --image s.png --annotate result.png
 python -m friday down
 ```

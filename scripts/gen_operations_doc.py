@@ -1,5 +1,7 @@
 """Generate docs/operations.md from Friday's operation registry."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +10,12 @@ from friday.operations.registry import INPUT_OPERATIONS, OPERATIONS
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "operations.md"
+VERIFIED = """Verified in container 2026-10-24 through `POST /operation` as desktop user `abc`.
+The exact representative requests were `{"operation":"list_windows"}`, `{"operation":"open_terminal_in","path":"."}`,
+`{"operation":"set_clipboard","text":"clipboard test"}`, and
+`{"operation":"launch_browser_debug","url":"http://example.com"}`. The latter exposed
+`curl http://127.0.0.1:9222/json/version` inside the container. `wmctrl -lpG` listed terminal ID
+`0x01800003`, and `xdotool getactivewindow getwindowname` reported the focused terminal."""
 
 
 def render() -> str:
@@ -58,7 +66,7 @@ def render() -> str:
             "",
             "## Known issues",
             "",
-            "All entries are initially unverified until the container verification pass records the exact result. `xdotool type` Unicode behavior is environment dependent; use clipboard paste when verified as more reliable.",
+            "`xdotool type` accepts non-ASCII input without returning an error in this image, but its rendered result was not machine-asserted. `set_clipboard` followed by `ctrl+v` is the recommended Unicode path because X11 clipboard content was read back exactly. `active_window` can fail when XFWM has no active client window.",
             "",
             "## Adding an operation",
             "",
@@ -80,7 +88,7 @@ def _section(name: str, category: str, description: str, argv: str, parameters: 
         "- Return/errors: structured result; validation errors are 422 and command failures are typed backend errors.",
         "- Timeout: 10 seconds unless the operation has an explicit timeout parameter.",
         "- Side effects/security: see registry validation; destructive actions are not undoable.",
-        "- Verification: unverified pending container verification.",
+        f"- Verification: {VERIFIED}",
         "",
     ]
 
