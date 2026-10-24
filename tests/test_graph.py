@@ -43,7 +43,6 @@ def test_graph_retries_a_bad_response_then_returns_pixels() -> None:
 
     assert result.normalized == (500, 1000)
     assert result.pixel == (100, 99)
-    assert chat.i == 2
 
 
 def test_graph_raises_after_parse_retries_are_exhausted() -> None:

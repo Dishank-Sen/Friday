@@ -6,6 +6,13 @@ from typing import Any
 
 import httpx
 
+from friday.actions.models import (
+    Action,
+    ActionResult,
+    KeyAction,
+    LeftClickAction,
+    TypeAction,
+)
 from friday.sandbox.base import Sandbox
 
 from .errors import DesktopConnectionError, DesktopRequestError
@@ -31,7 +38,7 @@ class DesktopClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "DesktopClient":
+    def __enter__(self) -> DesktopClient:
         return self
 
     def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
@@ -50,14 +57,30 @@ class DesktopClient:
         except (KeyError, TypeError, ValueError) as error:
             raise DesktopRequestError(502, "invalid screen size response") from error
 
+    def cursor_position(self) -> tuple[int, int]:
+        data = self._request("GET", "/cursor").json()
+        try:
+            return int(data["x"]), int(data["y"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise DesktopRequestError(502, "invalid cursor response") from error
+
+    def execute(self, action: Action) -> ActionResult:
+        response = self._request("POST", "/action", json=action.model_dump(mode="json"))
+        try:
+            return ActionResult.model_validate(response.json())
+        except (TypeError, ValueError) as error:
+            raise DesktopRequestError(502, "invalid action response") from error
+
     def click(self, x: int, y: int, button: int = 1) -> None:
-        self._request("POST", "/click", json={"x": x, "y": y, "button": button})
+        if button != 1:
+            raise ValueError("only left click is supported by this compatibility method")
+        self.execute(LeftClickAction(action="left_click", x=x, y=y))
 
     def type_text(self, text: str) -> None:
-        self._request("POST", "/type", json={"text": text})
+        self.execute(TypeAction(action="type", text=text))
 
     def key(self, combo: str) -> None:
-        self._request("POST", "/key", json={"combo": combo})
+        self.execute(KeyAction(action="key", key=combo))
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         try:

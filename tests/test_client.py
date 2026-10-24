@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from friday.actions.models import MouseMoveAction
 from friday.desktop.client import DesktopClient
 from friday.desktop.errors import DesktopRequestError
 from friday.sandbox.base import Sandbox
@@ -37,14 +38,18 @@ def test_client_sends_auth_and_returns_desktop_data() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         if request.url.path == "/screenshot":
-            return httpx.Response(200, content=b"png")
+            return httpx.Response(200, content=b"\x89PNG\r\n\x1a\n")
         if request.url.path == "/screen_size":
             return httpx.Response(200, json={"width": 1280, "height": 720})
+        if request.url.path == "/cursor":
+            return httpx.Response(200, json={"x": 2, "y": 3})
         return httpx.Response(200, json={"ok": True})
 
     with DesktopClient(FakeSandbox(), transport=httpx.MockTransport(handler)) as client:
-        assert client.screenshot() == b"png"
+        assert client.screenshot() == b"\x89PNG\r\n\x1a\n"
         assert client.screen_size() == (1280, 720)
+        assert client.cursor_position() == (2, 3)
+        assert client.execute(MouseMoveAction(action="mouse_move", x=10, y=20)).ok
         client.click(10, 20)
         client.type_text("hello")
         client.key("ctrl+a")

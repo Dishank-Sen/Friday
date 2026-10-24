@@ -11,7 +11,7 @@ from PIL import Image, UnidentifiedImageError
 
 from friday.llm.base import VisionLLM
 from friday.llm.errors import LLMParseError
-from friday.vision.coords import PointResponse, normalized_to_pixels, parse_point
+from friday.vision.coords import normalized_to_pixels, parse_point
 
 from .state import LocateState
 
@@ -27,7 +27,9 @@ class LocateResult:
 
 
 class LocateRunner:
-    def __init__(self, llm: VisionLLM, *, coordinate_grid: int = 1000, max_retries: int = 2) -> None:
+    def __init__(
+        self, llm: VisionLLM, *, coordinate_grid: int = 1000, max_retries: int = 2
+    ) -> None:
         if coordinate_grid <= 0:
             raise ValueError("coordinate_grid must be positive")
         if max_retries < 0:
@@ -79,10 +81,10 @@ class LocateRunner:
 
     def _call_model(self, state: LocateState) -> dict[str, object]:
         attempt = state["attempts"] + 1
-        LOGGER.info("locate model request attempt=%d image_bytes=%d", attempt, len(state["screenshot"]))
-        prompt = _load_prompt().format(
-            instruction=state["instruction"], grid=self._coordinate_grid
+        LOGGER.info(
+            "locate model request attempt=%d image_bytes=%d", attempt, len(state["screenshot"])
         )
+        prompt = _load_prompt().format(instruction=state["instruction"], grid=self._coordinate_grid)
         response = self._llm.invoke(prompt, [state["screenshot"]])
         return {"raw_model_output": response.text, "attempts": attempt, "error": None}
 
@@ -105,7 +107,10 @@ class LocateRunner:
             return "to_pixels"
         if state["attempts"] <= self._max_retries:
             return "call_model"
-        raise LLMParseError(f"could not parse model output after {state['attempts']} attempts: {state['raw_model_output']}")
+        raise LLMParseError(
+            "could not parse model output after "
+            f"{state['attempts']} attempts: {state['raw_model_output']}"
+        )
 
 
 def locate(llm: VisionLLM, png: bytes, instruction: str) -> LocateResult:

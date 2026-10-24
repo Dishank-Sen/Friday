@@ -7,11 +7,15 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from friday.actions.models import parse_action
 from friday.config import FridayConfig
 from friday.desktop.client import DesktopClient
 from friday.desktop.errors import DesktopError
+from friday.executor.remote import RemoteExecutor
 from friday.graph.locate import LocateRunner
-from friday.llm import LLMConfigError, LLMError, create_llm
+from friday.llm import LLMError, create_llm
 from friday.llm.config import LLMSettings
 from friday.sandbox.docker_sandbox import DockerSandbox
 from friday.vision.annotate import annotate_crosshair
@@ -33,6 +37,9 @@ def _parser() -> argparse.ArgumentParser:
     subparsers.add_parser("status")
     screenshot = subparsers.add_parser("screenshot")
     screenshot.add_argument("output", type=Path)
+    act = subparsers.add_parser("act")
+    act.add_argument("payload", help="JSON action object")
+    act.add_argument("--screenshot", type=Path, metavar="OUTPUT")
     locate = subparsers.add_parser("locate")
     locate.add_argument("instruction")
     source = locate.add_mutually_exclusive_group(required=True)
@@ -102,13 +109,25 @@ def main() -> int:
         sandbox = _load_sandbox()
         if args.command == "status":
             sandbox.wait_until_ready()
-            print(f"running and healthy\nViewer URL: {sandbox.viewer_url}\nAPI URL: {sandbox.api_url}")
+            print(
+                f"running and healthy\nViewer URL: {sandbox.viewer_url}\nAPI URL: {sandbox.api_url}"
+            )
             return 0
+        if args.command == "act":
+            return _act(args, sandbox)
         with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as desktop:
             args.output.write_bytes(desktop.screenshot())
         print(f"Screenshot saved to {args.output}")
         return 0
-    except (DesktopError, LLMError, OSError, TimeoutError, RuntimeError, ValueError) as error:
+    except (
+        DesktopError,
+        LLMError,
+        OSError,
+        TimeoutError,
+        RuntimeError,
+        ValidationError,
+        ValueError,
+    ) as error:
         print(f"Friday: {error}")
         return 1
 
@@ -133,6 +152,21 @@ def _locate(args: argparse.Namespace) -> int:
     print(f"Pixel point: {result.pixel}")
     print(f"Image size: {result.image_size}")
     print(f"Raw model text: {result.raw_text}")
+    return 0
+
+
+def _act(args: argparse.Namespace, sandbox: DockerSandbox) -> int:
+    action = parse_action(args.payload)
+    with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as client:
+        result = RemoteExecutor(client).execute(action)
+        if args.screenshot:
+            args.screenshot.write_bytes(result.image_png or client.screenshot())
+    detail = f": {result.detail}" if result.detail else ""
+    print(f"{action.action}: {'ok' if result.ok else 'failed'}{detail}")
+    if result.point:
+        print(f"Point: {result.point[0]}, {result.point[1]}")
+    if args.screenshot:
+        print(f"Screenshot saved to {args.screenshot}")
     return 0
 
 

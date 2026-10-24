@@ -11,9 +11,9 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import urlopen
 
-import docker
 from docker.errors import APIError, ImageNotFound, NotFound
 
+import docker
 from friday.config import FridayConfig
 from friday.constants import CONTROL_CONTAINER_PORT, WEBTOP_CONTAINER_PORT
 
@@ -23,7 +23,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DockerSandbox(Sandbox):
-    def __init__(self, config: FridayConfig | None = None, client: docker.DockerClient | None = None) -> None:
+    def __init__(
+        self, config: FridayConfig | None = None, client: docker.DockerClient | None = None
+    ) -> None:
         self.config = config or FridayConfig()
         self._client = client or docker.from_env()
         self._container: Any | None = None
@@ -40,7 +42,7 @@ class DockerSandbox(Sandbox):
         api_port: int,
         token: str,
         client: docker.DockerClient | None = None,
-    ) -> "DockerSandbox":
+    ) -> DockerSandbox:
         sandbox = cls(config, client)
         sandbox._viewer_port = viewer_port
         sandbox._api_port = api_port
@@ -106,7 +108,9 @@ class DockerSandbox(Sandbox):
         try:
             container.remove(force=True)
         except (NotFound, APIError):
-            LOGGER.warning("could not remove container %s", self.config.container_name, exc_info=True)
+            LOGGER.warning(
+                "could not remove container %s", self.config.container_name, exc_info=True
+            )
         finally:
             self._container = None
             self._viewer_port = None
@@ -122,7 +126,9 @@ class DockerSandbox(Sandbox):
                         return
             except (OSError, URLError):
                 time.sleep(0.25)
-        raise TimeoutError(f"control server did not become healthy within {self.config.startup_timeout}s")
+        raise TimeoutError(
+            f"control server did not become healthy within {self.config.startup_timeout}s"
+        )
 
     def _ensure_image(self) -> None:
         try:
@@ -151,7 +157,11 @@ class DockerSandbox(Sandbox):
     @staticmethod
     def _pick_port(requested: int | None, reserved: set[int | None] | None = None) -> int:
         reserved = reserved or set()
-        if requested is not None and requested not in reserved and DockerSandbox._can_bind(requested):
+        if (
+            requested is not None
+            and requested not in reserved
+            and DockerSandbox._can_bind(requested)
+        ):
             return requested
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind(("127.0.0.1", 0))

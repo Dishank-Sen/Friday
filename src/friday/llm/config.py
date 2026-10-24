@@ -22,7 +22,7 @@ class LLMSettings:
     coordinate_grid: int
 
     @classmethod
-    def from_env(cls) -> "LLMSettings":
+    def from_env(cls) -> LLMSettings:
         load_dotenv()
         api_key = os.getenv("FEATHERLESS_API_KEY", "")
         model = os.getenv("FRIDAY_LLM_MODEL", "")
@@ -44,5 +44,7 @@ class LLMSettings:
         except ValueError as error:
             raise LLMConfigError("LLM numeric settings must be valid numbers") from error
         if settings.timeout <= 0 or settings.max_retries < 0 or settings.coordinate_grid <= 0:
-            raise LLMConfigError("LLM timeout and coordinate grid must be positive; retries cannot be negative")
+            raise LLMConfigError(
+                "LLM timeout and coordinate grid must be positive; retries cannot be negative"
+            )
         return settings

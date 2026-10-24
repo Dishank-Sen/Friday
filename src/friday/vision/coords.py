@@ -30,7 +30,9 @@ def to_pixel(v: float, size: int, grid: int = 1000) -> int:
     return min(round(v / grid * size), size - 1)
 
 
-def normalized_to_pixels(point: PointResponse, width: int, height: int, grid: int = 1000) -> tuple[int, int]:
+def normalized_to_pixels(
+    point: PointResponse, width: int, height: int, grid: int = 1000
+) -> tuple[int, int]:
     return to_pixel(point.x, width, grid), to_pixel(point.y, height, grid)
 
 
