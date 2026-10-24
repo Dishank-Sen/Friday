@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 
 import pytest
@@ -39,6 +40,19 @@ def test_default_stubs_build_context_before_finishing_on_missing_decision() -> N
 
     assert result["decision"] is None
     assert calls == ["observe", "build_context", "decide", "finish"]
+
+
+def test_actual_default_stubs_run_in_prompt_flow_order(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO):
+        build_graph().invoke(initial_state("goal", 1))
+
+    messages = [record.message for record in caplog.records if record.levelno == logging.INFO]
+    assert messages == [
+        "harness observe stub ran",
+        "harness build_context stub ran",
+        "harness decide stub ran",
+        "harness finish stub ran",
+    ]
 
 
 @pytest.mark.parametrize("decision", ["done", "fail"])

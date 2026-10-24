@@ -32,6 +32,32 @@ def test_initial_state_has_neutral_defaults() -> None:
     }
 
 
+def test_agent_state_has_exactly_the_declared_fields() -> None:
+    from friday.harness.state import AgentState
+
+    assert set(AgentState.__annotations__) == {
+        "goal",
+        "status",
+        "step",
+        "max_steps",
+        "started_at",
+        "screenshot_path",
+        "prev_screenshot_path",
+        "prompt",
+        "screen_size",
+        "windows",
+        "decision",
+        "pending_action",
+        "guard_verdict",
+        "last_result",
+        "history",
+        "hint",
+        "retries",
+        "stuck_count",
+        "final_report",
+    }
+
+
 @pytest.mark.parametrize(
     ("decision", "expected"),
     [("action", "guard"), ("done", "finish"), ("fail", "finish"), ("retry", "build_context")],
