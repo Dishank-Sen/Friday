@@ -22,6 +22,11 @@ def route_after_guard(state: AgentState) -> str:
     return _route(state["guard_verdict"], _AFTER_GUARD, "guard_verdict")
 
 
+def route_after_observe(state: AgentState) -> str:
+    """Finish only after a fatal observation failure."""
+    return "finish" if state["status"] == "failed" else "build_context"
+
+
 def _route(value: str | None, routes: dict[str, str], field: str) -> str:
     if value is None:
         LOGGER.warning("harness route missing %s; finishing", field)

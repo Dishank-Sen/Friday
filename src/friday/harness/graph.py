@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .config import DEFAULT_RECURSION_LIMIT
 from .nodes import Nodes, default_nodes
-from .routes import route_after_decide, route_after_guard
+from .routes import route_after_decide, route_after_guard, route_after_observe
 from .state import AgentState
 
 
@@ -25,7 +25,9 @@ def build_graph(nodes: Nodes | None = None, checkpointer: Any = None) -> Any:
     graph.add_node("build_context", selected.build_context)
     graph.add_node("finish", selected.finish)
     graph.add_edge(START, "observe")
-    graph.add_edge("observe", "build_context")
+    graph.add_conditional_edges(
+        "observe", route_after_observe, {"finish": "finish", "build_context": "build_context"}
+    )
     graph.add_conditional_edges(
         "decide",
         route_after_decide,

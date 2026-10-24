@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from friday.harness.routes import route_after_decide, route_after_guard
+from friday.harness.routes import route_after_decide, route_after_guard, route_after_observe
 from friday.harness.state import initial_state
 
 
@@ -20,6 +20,7 @@ def test_initial_state_has_neutral_defaults() -> None:
         "prompt": None,
         "screen_size": None,
         "windows": [],
+        "focused_app": None,
         "decision": None,
         "pending_action": None,
         "guard_verdict": None,
@@ -46,6 +47,7 @@ def test_agent_state_has_exactly_the_declared_fields() -> None:
         "prompt",
         "screen_size",
         "windows",
+        "focused_app",
         "decision",
         "pending_action",
         "guard_verdict",
@@ -98,3 +100,12 @@ def test_unknown_route_value_raises(route: object, field: str) -> None:
     state[field] = "unknown"  # type: ignore[literal-required]
     with pytest.raises(ValueError, match="unknown"):
         route(state)  # type: ignore[operator]
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"), [("running", "build_context"), ("failed", "finish")]
+)
+def test_route_after_observe(status: str, expected: str) -> None:
+    state = initial_state("goal", 1)
+    state["status"] = status  # type: ignore[typeddict-item]
+    assert route_after_observe(state) == expected

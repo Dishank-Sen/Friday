@@ -186,6 +186,7 @@ def test_topology_matches_expected_nodes_and_edges() -> None:
     assert edges == {
         ("__start__", "observe"),
         ("observe", "build_context"),
+        ("observe", "finish"),
         ("decide", "guard"),
         ("decide", "finish"),
         ("decide", "build_context"),
