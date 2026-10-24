@@ -43,12 +43,30 @@ def test_client_sends_auth_and_returns_desktop_data() -> None:
             return httpx.Response(200, json={"width": 1280, "height": 720})
         if request.url.path == "/cursor":
             return httpx.Response(200, json={"x": 2, "y": 3})
+        if request.url.path == "/active_window":
+            return httpx.Response(
+                200, json={"id": "0x00000001", "class_name": "Chromium", "focused_app": "browser"}
+            )
+        if request.url.path == "/observation":
+            return httpx.Response(
+                200,
+                json={
+                    "screenshot_png": "iVBORw0KGgo=",
+                    "screen_size": [1280, 720],
+                    "windows": [],
+                    "active_window_id": None,
+                    "active_window_class": None,
+                    "focused_app": "other",
+                },
+            )
         return httpx.Response(200, json={"ok": True})
 
     with DesktopClient(FakeSandbox(), transport=httpx.MockTransport(handler)) as client:
         assert client.screenshot() == b"\x89PNG\r\n\x1a\n"
         assert client.screen_size() == (1280, 720)
         assert client.cursor_position() == (2, 3)
+        assert client.active_window().focused_app == "browser"
+        assert client.observation().screen_size == (1280, 720)
         assert client.execute(MouseMoveAction(action="mouse_move", x=10, y=20)).ok
         client.click(10, 20)
         client.type_text("hello")

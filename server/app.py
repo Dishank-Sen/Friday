@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from pydantic import ValidationError
 
 from friday.actions.models import ActionResult, parse_action
+from friday.desktop.observation import ActiveWindow, Observation
 from friday.operations.registry import OperationError, parse_operation
 from server.backend.base import BackendError, DesktopBackend
 from server.backend.runner import SubprocessRunner
@@ -94,6 +95,22 @@ def cursor() -> dict[str, int]:
     except BackendError as error:
         raise _backend_error(error) from error
     return {"x": x, "y": y}
+
+
+@app.get("/observation", dependencies=[Depends(require_auth)], response_model=Observation)
+def observation() -> Observation:
+    try:
+        return _backend().observation()
+    except BackendError as error:
+        raise _backend_error(error) from error
+
+
+@app.get("/active_window", dependencies=[Depends(require_auth)], response_model=ActiveWindow)
+def active_window() -> ActiveWindow:
+    try:
+        return _backend().active_window()
+    except BackendError as error:
+        raise _backend_error(error) from error
 
 
 @app.post("/action", dependencies=[Depends(require_auth)], response_model=ActionResult)

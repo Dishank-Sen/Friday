@@ -13,6 +13,7 @@ from friday.actions.models import (
     LeftClickAction,
     TypeAction,
 )
+from friday.desktop.observation import ActiveWindow, Observation
 from friday.operations.registry import SystemOperation
 from friday.sandbox.base import Sandbox
 
@@ -65,6 +66,12 @@ class DesktopClient:
         except (KeyError, TypeError, ValueError) as error:
             raise DesktopRequestError(502, "invalid cursor response") from error
 
+    def observation(self) -> Observation:
+        return self._model("GET", "/observation", Observation)
+
+    def active_window(self) -> ActiveWindow:
+        return self._model("GET", "/active_window", ActiveWindow)
+
     def execute(self, action: Action) -> ActionResult:
         response = self._request("POST", "/action", json=action.model_dump(mode="json"))
         try:
@@ -100,3 +107,9 @@ class DesktopClient:
             raise DesktopRequestError(error.response.status_code, detail) from error
         except httpx.RequestError as error:
             raise DesktopConnectionError(str(error)) from error
+
+    def _model(self, method: str, path: str, model: type[Any]) -> Any:
+        try:
+            return model.model_validate(self._request(method, path).json())
+        except (TypeError, ValueError) as error:
+            raise DesktopRequestError(502, f"invalid {path} response") from error

@@ -10,18 +10,25 @@ from friday.actions.models import (
     LeftClickAction,
     LeftMouseDownAction,
     MouseMoveAction,
+    ShortcutAction,
 )
 from server.backend.base import BackendError
 from server.backend.x11 import X11Backend
 
 
 class FakeRunner:
-    def __init__(self, fail_on: str | None = None, pause: bool = True) -> None:
+    def __init__(
+        self,
+        fail_on: str | None = None,
+        pause: bool = True,
+        active_class: str = "xfce4-terminal.Xfce4-terminal",
+    ) -> None:
         self.commands: list[list[str]] = []
         self.fail_on = fail_on
         self.pause = pause
         self.active = 0
         self.max_active = 0
+        self.active_class = active_class
         self._lock = threading.Lock()
 
     def run(self, argv: list[str]) -> str:
@@ -36,6 +43,10 @@ class FakeRunner:
                 return "100 80\n"
             if argv == ["xdotool", "getmouselocation", "--shell"]:
                 return "X=0\nY=0\n"
+            if argv == ["wmctrl", "-lpGx"]:
+                return f"0x00000001 0 1 0 0 1 1 {self.active_class}  host Window\n"
+            if argv == ["xdotool", "getactivewindow"]:
+                return "1\n"
             if self.pause:
                 time.sleep(0.005)
             return ""
@@ -77,7 +88,7 @@ def test_backend_releases_held_mouse_after_failure() -> None:
 
 
 def test_hold_key_releases_on_interrupted_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    runner = FakeRunner(pause=False)
+    runner = FakeRunner(pause=False, active_class="other.Other")
     backend = X11Backend(runner)
 
     def interrupted(_: float) -> None:
@@ -88,3 +99,23 @@ def test_hold_key_releases_on_interrupted_sleep(monkeypatch: pytest.MonkeyPatch)
         backend.execute(HoldKeyAction(action="hold_key", key="shift", duration=1))
 
     assert ["xdotool", "keyup", "--", "shift"] in runner.commands
+
+
+def test_shortcut_uses_fresh_terminal_focus() -> None:
+    runner = FakeRunner(pause=False)
+    backend = X11Backend(runner)
+
+    result = backend.execute(ShortcutAction(action="shortcut", name="copy"))
+
+    assert result.ok
+    assert ["xdotool", "key", "--", "ctrl+shift+c"] in runner.commands
+
+
+def test_unavailable_shortcut_returns_failed_result() -> None:
+    runner = FakeRunner(pause=False, active_class="other.Other")
+    backend = X11Backend(runner)
+
+    result = backend.execute(ShortcutAction(action="shortcut", name="terminal_interrupt"))
+
+    assert not result.ok
+    assert result.detail == "terminal_interrupt is available in: terminal; the focused app is other"

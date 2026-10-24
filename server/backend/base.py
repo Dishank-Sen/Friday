@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from friday.actions.models import Action, ActionResult
+from friday.desktop.observation import ActiveWindow, Observation
 
 
 class BackendError(RuntimeError):
@@ -17,5 +18,9 @@ class DesktopBackend(Protocol):
     def screen_size(self) -> tuple[int, int]: ...
 
     def cursor_position(self) -> tuple[int, int]: ...
+
+    def observation(self) -> Observation: ...
+
+    def active_window(self) -> ActiveWindow: ...
 
     def release_all(self) -> None: ...

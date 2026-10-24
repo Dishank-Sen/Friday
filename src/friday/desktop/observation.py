@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import re
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
 from friday.actions.focus import IGNORED_WINDOW_CLASSES, focused_app_for
 
@@ -41,6 +42,17 @@ class Observation(BaseModel):
     active_window_id: str | None
     active_window_class: str | None
     focused_app: str
+
+    @field_serializer("screenshot_png", when_used="json")
+    def _serialize_screenshot(self, image: bytes) -> str:
+        return base64.b64encode(image).decode("ascii")
+
+    @field_validator("screenshot_png", mode="before")
+    @classmethod
+    def _deserialize_screenshot(cls, image: object) -> object:
+        if isinstance(image, str):
+            return base64.b64decode(image, validate=True)
+        return image
 
 
 def capture_observation(

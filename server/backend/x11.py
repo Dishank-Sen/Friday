@@ -17,14 +17,23 @@ from friday.actions.models import (
     LeftClickDragAction,
     MouseMoveAction,
     ScreenshotAction,
+    ShortcutAction,
     WaitAction,
     ZoomAction,
 )
+from friday.desktop.observation import (
+    ActiveWindow,
+    Observation,
+    capture_observation,
+    parse_active_window,
+)
 from friday.operations.registry import SystemOperation
+from friday.shortcuts.registry import ShortcutNotAvailable, resolve_shortcut
 
 from .base import BackendError
 from .commands import (
     commands_for_action,
+    key_command,
     key_down_command,
     key_up_command,
     mouse_down_command,
@@ -109,6 +118,33 @@ class X11Backend:
         except (KeyError, ValueError) as error:
             raise BackendError("xdotool returned invalid cursor position") from error
 
+    def observation(self) -> Observation:
+        """Capture all display observation inputs while holding the display lock."""
+        with self._lock:
+            screenshot = self.screenshot()
+            screen_size = self._runner.run(["xdotool", "getdisplaygeometry"])
+            try:
+                windows = self._runner.run(["wmctrl", "-lpGx"])
+                active = self._runner.run(["xdotool", "getactivewindow"])
+            except BackendError:
+                LOGGER.warning("window observation failed", exc_info=True)
+                windows, active = "", ""
+            try:
+                return capture_observation(screenshot, screen_size, windows, active)
+            except ValueError as error:
+                raise BackendError(str(error)) from error
+
+    def active_window(self) -> ActiveWindow:
+        """Read the focused X11 window under the display lock."""
+        with self._lock:
+            try:
+                windows = self._runner.run(["wmctrl", "-lpGx"])
+                active = self._runner.run(["xdotool", "getactivewindow"])
+            except BackendError:
+                LOGGER.warning("active window lookup failed", exc_info=True)
+                return ActiveWindow(id=None, class_name=None, focused_app="other")
+            return parse_active_window(windows, active)
+
     def release_all(self) -> None:
         with self._lock:
             for key in list(self._held_keys):
@@ -147,6 +183,16 @@ class X11Backend:
             return ActionResult(ok=True)
         if isinstance(action, HoldKeyAction):
             self._hold_key(action)
+            return ActionResult(ok=True)
+        if isinstance(action, ShortcutAction):
+            focused_app = self.active_window().focused_app
+            try:
+                keys = resolve_shortcut(action.name, focused_app)
+            except ShortcutNotAvailable as error:
+                return ActionResult(ok=False, detail=str(error))
+            for _ in range(action.repeat):
+                for key in keys:
+                    self._runner.run(key_command(key))
             return ActionResult(ok=True)
         self._validate_action_bounds(action)
         for command in commands_for_action(action):
