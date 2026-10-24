@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from friday.actions.models import parse_action
 from friday.config import FridayConfig
+from friday.dashboard import Dashboard, DashboardLauncher
 from friday.desktop.client import DesktopClient
 from friday.desktop.errors import DesktopError
 from friday.executor.remote import RemoteExecutor
@@ -63,12 +64,14 @@ def _config(args: argparse.Namespace) -> FridayConfig:
     )
 
 
-def _write_state(sandbox: DockerSandbox) -> None:
+def _write_state(sandbox: DockerSandbox, dashboard: Dashboard) -> None:
     state = {
         "config": asdict(sandbox.config),
         "viewer_port": sandbox.viewer_url.rsplit(":", maxsplit=1)[1],
         "api_port": sandbox.api_url.rsplit(":", maxsplit=1)[1],
         "token": sandbox.token,
+        "dashboard_url": dashboard.url,
+        "dashboard_pid": dashboard.pid,
     }
     STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
 
@@ -88,21 +91,40 @@ def _load_sandbox() -> DockerSandbox:
         raise RuntimeError("Friday is not running; use `python -m friday up` first") from error
 
 
+def _dashboard_state() -> tuple[str | None, int | None]:
+    try:
+        state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        url = state.get("dashboard_url")
+        pid = state.get("dashboard_pid")
+        return (str(url) if url else None, int(pid) if pid else None)
+    except (FileNotFoundError, TypeError, ValueError, json.JSONDecodeError):
+        return None, None
+
+
 def main() -> int:
     args = _parser().parse_args()
     if args.command == "up":
         sandbox = DockerSandbox(_config(args))
-        sandbox.start()
-        _write_state(sandbox)
+        try:
+            sandbox.start()
+            project_root = Path(__file__).resolve().parents[2]
+            dashboard = DashboardLauncher(project_root).start(sandbox.viewer_url, sandbox.api_url)
+        except BaseException:
+            sandbox.stop()
+            raise
+        _write_state(sandbox, dashboard)
+        print(f"Dashboard URL: {dashboard.url}")
         print(f"Viewer URL: {sandbox.viewer_url}")
         print(f"API URL: {sandbox.api_url}")
         return 0
     if args.command == "down":
+        _, dashboard_pid = _dashboard_state()
         try:
             sandbox = _load_sandbox()
         except RuntimeError:
             sandbox = DockerSandbox(_config(args))
         sandbox.stop()
+        DashboardLauncher.stop(dashboard_pid)
         STATE_FILE.unlink(missing_ok=True)
         print("Friday sandbox removed.")
         return 0
@@ -112,8 +134,10 @@ def main() -> int:
         sandbox = _load_sandbox()
         if args.command == "status":
             sandbox.wait_until_ready()
+            dashboard_url, _ = _dashboard_state()
             print(
-                f"running and healthy\nViewer URL: {sandbox.viewer_url}\nAPI URL: {sandbox.api_url}"
+                f"running and healthy\nDashboard URL: {dashboard_url or 'not running'}\n"
+                f"Viewer URL: {sandbox.viewer_url}\nAPI URL: {sandbox.api_url}"
             )
             return 0
         if args.command == "act":

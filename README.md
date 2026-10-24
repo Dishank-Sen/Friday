@@ -20,7 +20,7 @@ pip install -e '.[dev]'
 python -m friday up
 ```
 
-The `up` command prints a browser viewer URL and a control API URL. Stop and remove the container when finished:
+The `up` command starts the standalone dashboard and prints its URL first. Open that Dashboard URL to use the embedded desktop; the direct viewer and control API URLs are also printed for diagnostics. The dashboard runs as a local Vite process and is kept separate from the Docker control server. Stop both when finished:
 
 ```sh
 python -m friday down
@@ -30,6 +30,7 @@ python -m friday down
 
 ```sh
 python -m friday up
+ # Open the printed Dashboard URL
 python -m friday status
 python -m friday screenshot out.png
 python -m friday act '{"action":"left_click","x":100,"y":100}'

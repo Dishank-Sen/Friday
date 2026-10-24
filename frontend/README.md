@@ -20,7 +20,7 @@ VITE_VIEWER_URL=http://127.0.0.1:<viewer-port>
 VITE_BACKEND_URL=http://127.0.0.1:<api-port>
 ```
 
-Then start the UI from `frontend/`:
+Normally, `python -m friday up` starts Vite with the current sandbox URLs and prints the dashboard URL. For standalone frontend work, start it manually from `frontend/`:
 
 ```sh
 npm install
