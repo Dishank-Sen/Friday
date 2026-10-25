@@ -36,7 +36,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--width", type=int, default=FridayConfig().width)
     parser.add_argument("--height", type=int, default=FridayConfig().height)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("up")
+    up = subparsers.add_parser("up")
+    up.add_argument(
+        "--rebuild", action="store_true", help="rebuild the sandbox image before starting"
+    )
     subparsers.add_parser("down")
     subparsers.add_parser("status")
     screenshot = subparsers.add_parser("screenshot")
@@ -68,6 +71,7 @@ def _config(args: argparse.Namespace) -> FridayConfig:
         api_port=args.api_port,
         width=args.width,
         height=args.height,
+        rebuild_image=bool(getattr(args, "rebuild", False)),
     )
 
 
