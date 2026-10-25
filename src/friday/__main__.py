@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from friday.actions.focus import focused_app_for
 from friday.actions.models import parse_action
+from friday.browser.remote import RemoteBrowserProbe
 from friday.config import FridayConfig
 from friday.dashboard import Dashboard, DashboardLauncher
 from friday.desktop.client import DesktopClient
@@ -223,6 +224,7 @@ def _run_task(args: argparse.Namespace) -> int:
                 trace_writer=trace_writer,
                 settings=ExecutorSettings(),
             ),
+            browser_probe=RemoteBrowserProbe(desktop),
         )
         graph = build_production_graph(deps)
         try:

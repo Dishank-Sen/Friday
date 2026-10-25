@@ -62,6 +62,7 @@ class ProductionDeps:
     executor: ExecutorDeps | None = None
     settle: Node | None = None
     verify: Node | None = None
+    browser_probe: object | None = None
 
 
 def build_production_graph(
@@ -92,7 +93,12 @@ def build_production_graph(
     if deps.policy is not None:
         real["build_context"] = make_build_context(policy=deps.policy, limits=deps.limits)
         real["guard"] = make_guard(policy=deps.policy)
-    real["verify"] = make_verify(deps=VerifyDeps(load_screenshot=_default_loader))
+    real["verify"] = make_verify(
+        deps=VerifyDeps(
+            load_screenshot=_default_loader,
+            probe=deps.browser_probe,
+        )
+    )
     real["finish"] = make_finish()
     if deps.executor is not None:
         real["executor"] = make_executor_node(deps.executor)

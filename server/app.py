@@ -13,9 +13,11 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from pydantic import ValidationError
 
 from friday.actions.models import ActionResult, parse_action
+from friday.browser.models import BrowserState, ProbeStatus, WaitReady
 from friday.desktop.observation import ActiveWindow, Observation
 from friday.operations.registry import OperationError, parse_operation
 from server.backend.base import BackendError, DesktopBackend
+from server.backend.browser import BrowserBackend
 from server.backend.runner import SubprocessRunner
 from server.backend.x11 import X11Backend
 
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     workspace.mkdir(parents=True, exist_ok=True)
     backend = X11Backend(SubprocessRunner(os.environ.get(DISPLAY_ENV, DEFAULT_DISPLAY)), workspace)
     app.state.backend = backend
+    app.state.browser_backend = BrowserBackend()
     try:
         yield
     finally:
@@ -139,3 +142,28 @@ def operation(payload: dict[str, object]) -> dict[str, object]:
         return _backend().execute_operation(system_operation)
     except BackendError as error:
         raise _backend_error(error) from error
+
+
+def _browser() -> BrowserBackend:
+    return app.state.browser_backend
+
+
+@app.get("/browser/available", dependencies=[Depends(require_auth)])
+def browser_available() -> ProbeStatus:
+    return _browser().available()
+
+
+@app.get("/browser/state", dependencies=[Depends(require_auth)])
+def browser_state() -> BrowserState:
+    return _browser().state()
+
+
+@app.post("/browser/wait_ready", dependencies=[Depends(require_auth)])
+def browser_wait_ready(payload: dict[str, object]) -> WaitReady:
+    timeout_s = payload.get("timeout_s", 5.0)
+    if not isinstance(timeout_s, (int, float)) or timeout_s <= 0 or timeout_s > 30:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="timeout_s must be a positive number <= 30",
+        )
+    return _browser().wait_ready(float(timeout_s))

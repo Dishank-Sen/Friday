@@ -63,6 +63,21 @@ def test_client_sends_auth_and_returns_desktop_data() -> None:
                     "focused_app": "other",
                 },
             )
+        if request.url.path == "/browser/state":
+            return httpx.Response(
+                200,
+                json={
+                    "url": "https://x.example",
+                    "title": "GitHub",
+                    "ready_state": "complete",
+                    "loading": False,
+                    "tab_count": 1,
+                },
+            )
+        if request.url.path == "/browser/available":
+            return httpx.Response(200, json={"available": True})
+        if request.url.path == "/browser/wait_ready":
+            return httpx.Response(200, json={"state": "ready", "waited_ms": 5})
         return httpx.Response(200, json={"ok": True})
 
     with DesktopClient(FakeSandbox(), transport=httpx.MockTransport(handler)) as client:
@@ -75,6 +90,11 @@ def test_client_sends_auth_and_returns_desktop_data() -> None:
         client.click(10, 20)
         client.type_text("hello")
         client.key("ctrl+a")
+        state = client.browser_state()
+        assert state.url == "https://x.example"
+        assert state.title == "GitHub"
+        assert client.browser_status().available is True
+        assert client.browser_wait_ready(5.0).state == "ready"
 
     assert all(request.headers["authorization"] == "Bearer secret" for request in seen)
 

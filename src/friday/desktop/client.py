@@ -13,6 +13,7 @@ from friday.actions.models import (
     LeftClickAction,
     TypeAction,
 )
+from friday.browser.models import BrowserState, ProbeStatus, WaitReady
 from friday.desktop.observation import ActiveWindow, Observation
 from friday.operations.registry import SystemOperation
 from friday.sandbox.base import Sandbox
@@ -89,6 +90,21 @@ class DesktopClient:
             return response.json()
         except ValueError as error:
             raise DesktopRequestError(502, "invalid operation response") from error
+
+    def browser_state(self) -> BrowserState:
+        return self._model("GET", "/browser/state", BrowserState)
+
+    def browser_wait_ready(self, timeout_s: float) -> WaitReady:
+        if timeout_s <= 0:
+            raise ValueError("timeout_s must be positive")
+        response = self._request("POST", "/browser/wait_ready", json={"timeout_s": timeout_s})
+        try:
+            return WaitReady.model_validate(response.json())
+        except (TypeError, ValueError) as error:
+            raise DesktopRequestError(502, "invalid wait_ready response") from error
+
+    def browser_status(self) -> ProbeStatus:
+        return self._model("GET", "/browser/available", ProbeStatus)
 
     def click(self, x: int, y: int, button: int = 1) -> None:
         if button != 1:
