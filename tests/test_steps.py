@@ -31,7 +31,7 @@ class _FakeExecutor:
 
 
 def _step(payload: str, expected_result: str | None = None) -> StepSpec:
-    return StepSpec(action=parse_action(payload), expected_result=expected_result)
+    return StepSpec(payload=parse_action(payload), expected_result=expected_result)
 
 
 def _ok(detail: str | None = None, point=None, image: bytes | None = None) -> ActionResult:

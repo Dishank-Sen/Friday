@@ -20,6 +20,7 @@ def _png() -> bytes:
 class FakeClient:
     def __init__(self) -> None:
         self.sent = []
+        self.ops = []
         self.last_timeout: float | None = None
 
     def screenshot(self) -> bytes:
@@ -31,6 +32,10 @@ class FakeClient:
         from friday.actions.models import ActionResult
 
         return ActionResult(ok=True)
+
+    def operation(self, operation: object):
+        self.ops.append(operation)
+        return {"ok": True, "pid": 42}
 
 
 class FakeSandbox(Sandbox):
@@ -103,3 +108,22 @@ def test_zoom_clamps_crop_and_maps_coordinates() -> None:
     assert result.zoom.crop == (0, 0, 50, 40)
     assert result.zoom.to_screen(0, 0) == (0, 0)
     assert result.zoom.to_screen(98, 78) == (49, 39)
+
+
+def test_remote_executor_dispatches_operation_to_client() -> None:
+    from friday.harness.config import WORKSPACE_ROOT
+    from friday.operations.registry import OpenUrl, parse_operation
+
+    client = FakeClient()
+    executor = RemoteExecutor(client)  # type: ignore[arg-type]
+    operation = parse_operation(
+        {"operation": "open_url", "url": "https://github.com/Dishank-Sen"}, WORKSPACE_ROOT
+    )
+
+    result = executor.execute(operation)
+
+    assert isinstance(operation, OpenUrl)
+    # an operation is routed to client.operation(), not client.execute()
+    assert client.ops == [operation]
+    assert client.sent == []
+    assert result == {"ok": True, "pid": 42}

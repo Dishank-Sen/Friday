@@ -82,16 +82,31 @@ of the same records while the top-level fields keep describing the last item,
 so existing readers (`facts`, `render`) do not break. `run_steps` is the single
 execution path and today produces one item per call.
 
+## Operation dispatch
+
+The loop's decide produces either an input action (an `action` discriminator) or
+a system operation (an `operation` discriminator); the prompt offers both. The
+executor node validates and runs either. An `operation` payload is validated
+against the authoritative registry (`parse_operation`) and dispatched as a
+`SystemOperation` through the same executor boundary (`run_steps` /
+`RemoteExecutor.execute`), which calls the server's `POST /operation` endpoint.
+The server returns a loose dict (`{ok}`, `{output}`, `{text}`, `{content}`,
+`{entries}`, `{pid}`…); the recorded `last_result` treats a missing `ok` as
+success and folds a bounded JSON of the dict into `detail`.
+
+Read-type operations (`read_file`, `get_clipboard`, `list_dir`,
+`list_processes`, `active_window`) return untrusted text whose purpose is to
+feed the next prompt through `build_context`, so their `detail` is preserved.
+This keeps operation results flowing forward while input-action payloads
+(`type`/`key`/`hold_key`) remain suppressed. A canary test asserts typed text
+never reaches `last_result`.
+
 ## Observation operations
 
 Action-union observation operations (`screenshot`, `zoom`, `cursor_position`)
 may return `image_png`. Those bytes are written through the trace writer's
 `write_image` (sanitized name, step-indexed) and `last_result` holds only
-`image_path`. Text results — for the observation-style *system operations*
-(`list_windows`, `active_window`, `get_clipboard`, `read_file`) — are **not**
-routed through this node: those are SystemOperations on a different endpoint and
-are out of scope here. Read-type operations return untrusted text that will
-reach the next prompt through `build_context`.
+`image_path`.
 
 Secrets must not be typed through the model until a secrets layer exists. The
 node never logs, traces, or stores typed text, clipboard contents, or file

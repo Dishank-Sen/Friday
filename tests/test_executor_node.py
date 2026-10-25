@@ -17,10 +17,10 @@ class _FakeExecutor:
         self.calls: list = []
         self._result_holder = None
 
-    def execute(self, action):  # noqa: ANN001, ANN202
-        self.calls.append(action)
+    def execute(self, payload):  # noqa: ANN001, ANN202
+        self.calls.append(payload)
         if callable(self.result):
-            return self.result(action)
+            return self.result(payload)
         if isinstance(self.result, BaseException):
             raise self.result
         from friday.actions.models import ActionResult
@@ -102,12 +102,13 @@ def test_missing_pending_action_is_internal_error() -> None:
     assert result["last_result"]["error"]["type"] == "internal_error"
 
 
-def test_wrong_kind_pending_action_is_internal_error() -> None:
+def test_missing_discriminator_is_internal_error() -> None:
     executor = _FakeExecutor()
     node = _node(executor=executor)
 
-    # a system operation proposal is not an action the node may run
-    result = node(_state({"operation": "list_windows"}))
+    # a proposal with neither an action nor an operation discriminator is not
+    # runnable and must not reach the executor
+    result = node(_state({"purpose": "confused"}))
 
     assert executor.calls == []
     assert result["last_result"]["error"]["type"] == "internal_error"
@@ -224,3 +225,72 @@ def test_result_is_json_serializable_and_bounded() -> None:
     result = node(_state(_click()))
 
     json.dumps(result["last_result"])  # does not raise
+
+
+# --- operations are dispatched, not rejected ---------------------------------
+
+
+def test_operation_is_dispatched_and_recorded() -> None:
+    """An allowed operation reaches the executor, not an internal_error."""
+    from friday.operations.registry import OpenUrl
+
+    executor = _FakeExecutor()
+    node = _node(executor=executor)
+    pending = {"operation": "open_url", "url": "https://github.com/Dishank-Sen"}
+
+    result = node(_state(pending, verdict="allow"))
+
+    assert len(executor.calls) == 1
+    dispatched = executor.calls[0]
+    assert isinstance(dispatched, OpenUrl)
+    assert dispatched.url == "https://github.com/Dishank-Sen"
+    assert result["last_result"]["ok"] is True
+    assert result["last_result"]["error"] is None
+
+
+def test_operation_dict_result_is_folded_into_last_result() -> None:
+    """Operation results are plain dicts; ok is preserved into last_result."""
+    executor = _FakeExecutor({"ok": True, "pid": 1234})
+    node = _node(executor=executor)
+    pending = {"operation": "launch_app", "app": "browser"}
+
+    result = node(_state(pending, verdict="allow"))
+
+    assert result["last_result"]["ok"] is True
+    assert result["last_result"]["detail"] == '{"ok": true, "pid": 1234}'
+
+
+def test_read_operation_text_flows_into_last_result() -> None:
+    """Read-type operations return text that is the point of the operation."""
+    executor = _FakeExecutor({"content": "the unexpected token"})
+    node = _node(executor=executor)
+    pending = {"operation": "read_file", "path": "notes.txt"}
+
+    result = node(_state(pending, verdict="allow"))
+
+    assert result["last_result"]["ok"] is True
+    dumped = json.dumps(result["last_result"])
+    assert "the unexpected token" in dumped
+
+
+def test_failed_operation_is_recorded_as_failed() -> None:
+    """An operation whose result reports ok:false is a failure, not success."""
+    executor = _FakeExecutor({"ok": False, "output": "command returned nonzero"})
+    node = _node(executor=executor)
+    pending = {"operation": "close_app", "pid": 999}
+
+    result = node(_state(pending, verdict="allow"))
+
+    assert result["last_result"]["ok"] is False
+
+
+def test_unknown_operation_is_an_internal_error_not_dispatched() -> None:
+    """An unparseable operation never reaches the executor."""
+    executor = _FakeExecutor()
+    node = _node(executor=executor)
+    pending = {"operation": "sudo_rm_rf", "target": "/"}
+
+    result = node(_state(pending))
+
+    assert executor.calls == []
+    assert result["last_result"]["error"]["type"] == "invalid_action"

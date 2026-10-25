@@ -17,9 +17,11 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from friday.actions.models import parse_action
+from friday.actions.models import Action, parse_action
+from friday.harness.config import WORKSPACE_ROOT
 from friday.harness.state import AgentState
 from friday.harness.steps import ExecutorSettings, StepSpec, run_steps
+from friday.operations.registry import SystemOperation, parse_operation
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,15 +66,25 @@ def _execute_once(state: AgentState, deps: ExecutorDeps) -> dict:
         return _defensive("not_allowed", "guard did not allow this action")
 
     pending = state.get("pending_action")
-    if not isinstance(pending, dict) or pending.get("action") is None:
+    if not isinstance(pending, dict):
         return _defensive("internal_error", "no action to execute")
 
+    has_action = pending.get("action") is not None
+    has_operation = pending.get("operation") is not None
+
     try:
-        action = parse_action(dict(pending))
+        if has_operation:
+            payload: Action | SystemOperation = parse_operation(
+                dict(pending), WORKSPACE_ROOT
+            )
+        elif has_action:
+            payload = parse_action(dict(pending))
+        else:
+            return _defensive("internal_error", "no action or operation to execute")
     except (ValueError, TypeError):
         return _defensive("invalid_action", "pending action failed validation")
 
-    step = StepSpec(action=action, expected_result=pending.get("expected_result"))
+    step = StepSpec(payload=payload, expected_result=pending.get("expected_result"))
     outcomes = run_steps(deps.executor, [step], settings=deps.settings, clock=deps.clock)
     outcome = outcomes[-1]
 

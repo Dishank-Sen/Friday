@@ -379,3 +379,82 @@ def test_production_graph_full_loop_executes_settles_verifies_terminal_state() -
     assert result["history"][-1]["outcome"] == "succeeded"
     # finish resolved the terminal status to done
     assert result["status"] == "done"
+
+
+def test_production_graph_full_loop_dispatches_an_operation_and_terminates() -> None:
+    """An operation proposal (open_url) must dispatch and finish, not loop.
+
+    This is the regression test for the reported bug: ``friday run "open my
+    github"`` proposed the ``open_url`` operation, the guard allowed it, but the
+    executor never dispatched it, so the loop ran to the recursion limit.
+    """
+    from friday.operations.registry import OpenUrl
+
+    executed: list[object] = []
+
+    class _Ex:
+        def execute(self, payload):  # noqa: ANN001, ANN202
+            executed.append(payload)
+            if isinstance(payload, OpenUrl):
+                return {"ok": True}
+            from friday.actions.models import ActionResult
+
+            return ActionResult(ok=True)
+
+    class _Tr:
+        def __init__(self) -> None:
+            import tempfile
+
+            self._f = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            self._f.write(b"\x89PNG\r\n\x1a\n")
+            self._f.close()
+            self._path = self._f.name
+
+        def write(self, observation, error=None):
+            return self._path
+
+        def write_image(self, step_index: int, name: str, png: bytes) -> str:
+            return f"{self._path}#{name}"
+
+    class _Policy:
+        def policy(self, state):  # noqa: ANN001
+            from friday.harness.capabilities import ControlPolicy
+
+            return ControlPolicy(approval=True, user_control=False)
+
+    class _OpenThenDone:
+        def __init__(self) -> None:
+            self.count = 0
+
+        def invoke(self, prompt, images):  # noqa: ANN001
+            from friday.llm.base import LLMResponse
+
+            self.count += 1
+            if self.count == 1:
+                return LLMResponse(
+                    text='{"decision": "action", "pending_action": '
+                    '{"operation": "open_url", "url": "https://github.com/Dishank-Sen"}}'
+                )
+            return LLMResponse(text='{"decision": "done"}')
+
+    from friday.harness.nodes.executor import ExecutorDeps
+    from friday.harness.steps import ExecutorSettings
+
+    deps = ProductionDeps(
+        client=_FakeClient(),
+        trace_writer=_Tr(),
+        focus_table=lambda _c: "browser",
+        llm=_OpenThenDone(),
+        policy=_Policy(),
+        executor=ExecutorDeps(executor=_Ex(), trace_writer=_Tr(), settings=ExecutorSettings()),
+    )
+    graph = build_production_graph(deps)
+    state = initial_state("open a web page", 5)
+    state["retries"] = 2
+
+    result = graph.invoke(state, config={"recursion_limit": 50})
+
+    assert len(executed) == 1
+    assert isinstance(executed[0], OpenUrl)
+    assert result["history"][-1]["outcome"] == "succeeded"
+    assert result["status"] == "done"

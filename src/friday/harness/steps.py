@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from friday.desktop.errors import (
     DesktopRequestError,
     DesktopTimeoutError,
 )
+from friday.operations.registry import SystemOperation
 
 # The fixed, small set of error types callers and the node can rely on. The
 # layer's richer errors are collapsed into these by ``run_steps``.
@@ -43,11 +45,11 @@ class ConfigurationError(ValueError):
 
 
 class StepSpec(BaseModel):
-    """One validated action to run, with the outcome the model expected."""
+    """One validated step to run: an input action or a system operation."""
 
     model_config = ConfigDict(extra="forbid")
 
-    action: Action
+    payload: Action | SystemOperation
     expected_result: str | None = None
 
 
@@ -110,33 +112,61 @@ def _clock_now() -> float:
     return time.monotonic()
 
 
+def _name_of(payload: Action | SystemOperation) -> str:
+    """The operation/action name of a step payload, for recording and detail rules."""
+    name = getattr(payload, "operation", None) or getattr(payload, "action", None)
+    return str(name or "")
+
+
 def _record(
-    action: Action,
-    outcome: ActionResult,
+    payload: Action | SystemOperation,
+    outcome: ActionResult | dict,
     *,
     started: float,
     clock: Callable[[], float],
     max_detail: int,
 ) -> StepOutcome:
-    operation = str(action.action)
+    operation = _name_of(payload)
     detail: str | None = None
-    if outcome.detail is not None and not _sensitive(operation):
-        detail = _truncate(outcome.detail, max_detail)
+    ok: bool
     point = None
-    if outcome.point is not None:
-        point = [int(outcome.point[0]), int(outcome.point[1])]
+    image_png: bytes | None = None
+    if isinstance(outcome, dict):
+        ok = bool(outcome.get("ok", True))
+        if not _sensitive(operation):
+            detail = _operation_detail(outcome, max_detail)
+    else:
+        ok = outcome.ok
+        if outcome.detail is not None and not _sensitive(operation):
+            detail = _truncate(outcome.detail, max_detail)
+        if outcome.point is not None:
+            point = [int(outcome.point[0]), int(outcome.point[1])]
+        image_png = outcome.image_png
     return StepOutcome(
-        ok=outcome.ok,
+        ok=ok,
         operation=operation,
         detail=detail,
         duration_ms=int(round((clock() - started) * 1000)),
         point=point,
-        image_png=outcome.image_png,
+        image_png=image_png,
     )
 
 
+def _operation_detail(result: dict, max_detail: int) -> str | None:
+    """Bounded detail text from an operation result.
+
+    Operations return loose dicts (``output``/``text``/``content``/``entries``/
+    ``pid``/``ok``). The text-carrying fields are preserved so read-type
+    operations feed their result forward into the next prompt; pure status
+    (``{ok: True}``) has no detail. The full dict is JSON-serialized, bounded,
+    and returned as the single detail string.
+    """
+    text = json.dumps(result, sort_keys=True, ensure_ascii=False)
+    return _truncate(text, max_detail)
+
+
 def _failed_record(
-    action: Action,
+    payload: Action | SystemOperation,
     error: dict[str, str],
     *,
     started: float,
@@ -144,7 +174,7 @@ def _failed_record(
 ) -> StepOutcome:
     return StepOutcome(
         ok=False,
-        operation=str(action.action),
+        operation=_name_of(payload),
         error=error,
         duration_ms=int(round((clock() - started) * 1000)),
     )
@@ -176,7 +206,7 @@ def run_steps(
     for step in steps:
         started = clock()
         try:
-            outcome = executor.execute(step.action)  # type: ignore[attr-defined]
+            outcome = executor.execute(step.payload)  # type: ignore[attr-defined]
         except (KeyboardInterrupt, SystemExit):
             raise
         except BaseException as error:
@@ -184,7 +214,7 @@ def run_steps(
             message = message[: settings.max_detail]
             results.append(
                 _failed_record(
-                    step.action,
+                    step.payload,
                     {"type": error_type, "message": message},
                     started=started,
                     clock=clock,
@@ -192,7 +222,7 @@ def run_steps(
             )
             break
         record = _record(
-            step.action,
+            step.payload,
             outcome,
             started=started,
             clock=clock,
@@ -200,6 +230,7 @@ def run_steps(
         )
         record.expected_result = step.expected_result
         results.append(record)
-        if not outcome.ok:
+        ok = outcome.ok if not isinstance(outcome, dict) else outcome.get("ok", True)
+        if not ok:
             break
     return results
