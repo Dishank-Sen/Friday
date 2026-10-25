@@ -28,3 +28,17 @@ class ObservationTraceWriter:
         }
         (self._trace_dir / "observation.json").write_text(json.dumps(payload), encoding="utf-8")
         return str(screenshot_path)
+
+    def write_image(self, step_index: int, name: str, png: bytes) -> str:
+        """Save observation image bytes and return the path.
+
+        ``name`` is collapsed to a plain basename and the step index is folded
+        in, so hostile names cannot escape the trace folder. Returns the path in
+        the same form as ``write`` returns the screenshot path.
+        """
+        self._trace_dir.mkdir(parents=True, exist_ok=True)
+        safe = Path(name).name or "image"
+        filename = f"{safe}-{step_index}.png"
+        target = self._trace_dir / filename
+        target.write_bytes(png)
+        return str(target)

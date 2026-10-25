@@ -17,6 +17,7 @@ from friday.actions.focus import focused_app_for
 from friday.desktop.observation import Observation, WindowInfo
 from friday.harness.contract import NODES
 from friday.harness.nodes.build_context import make_build_context
+from friday.harness.nodes.executor import ExecutorDeps, make_executor_node
 from friday.harness.nodes.guard import make_guard
 from friday.harness.nodes.observe import make_observe
 from friday.harness.state import initial_state
@@ -54,6 +55,16 @@ class _FakeTrace:
     def write(self, observation, error=None):  # noqa: ANN001
         return "/tmp/shot.png"
 
+    def write_image(self, step_index: int, name: str, png: bytes) -> str:
+        return f"/tmp/{name}-{step_index}.png"
+
+
+class _FakeExecutor:
+    def execute(self, action):  # noqa: ANN001, ANN202
+        from friday.actions.models import ActionResult
+
+        return ActionResult(ok=True)
+
 
 def _base_state(**overrides) -> dict:
     state = initial_state("open a web page", 10)
@@ -74,6 +85,9 @@ def _nodes() -> dict[str, object]:
         "decide": make_decide(llm=_FakeLLM()),
         "guard": make_guard(),
         "observe": make_observe(_FakeClient(), _FakeTrace(), focused_app_for),
+        "executor": make_executor_node(
+            ExecutorDeps(executor=_FakeExecutor(), trace_writer=_FakeTrace())
+        ),
     }
 
 
@@ -87,6 +101,10 @@ class _FakeLLM:
 def _case_state(name: str) -> dict:
     if name == "guard":
         return _base_state(pending_action={"action": "shortcut", "name": "copy"})
+    if name == "executor":
+        return _base_state(
+            guard_verdict="allow", pending_action={"action": "left_click", "x": 1, "y": 2}
+        )
     if name == "decide":
         return _base_state(prompt="a rendered prompt", screenshot_path=None)
     return _base_state()
@@ -197,6 +215,48 @@ def test_build_context_dependency_closure_avoids_forbidden_imports() -> None:
         for module in imported_modules:
             assert module != forbidden and not module.startswith(forbidden + "."), (
                 f"forbidden import {forbidden} (saw {module}) in build_context closure"
+            )
+
+
+# --- import boundary: executor node does not reach forbidden modules ---------
+
+_EXECUTOR_FORBIDDEN = {
+    "friday.llm",
+    "docker",
+    "subprocess",
+    "requests",
+    "httpx",
+    "friday.sandbox",
+    "friday.desktop.client",
+    "friday.desktop.observation",
+    "friday.desktop.__init__",
+}
+
+
+def test_executor_node_dependency_closure_avoids_forbidden_imports() -> None:
+    """The executor node may use models + the Executor protocol, not I/O layers.
+
+    The exception classes in ``friday.desktop.errors`` are part of the boundary
+    (the injected Executor raises them); the node never reaches the desktop
+    client, observation, or sandbox directly.
+    """
+    mods = [
+        Path("src/friday/harness/nodes/executor.py"),
+        Path("src/friday/harness/steps.py"),
+    ]
+    imported_modules: set[str] = set()
+    for path in mods:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported_modules.add(alias.name)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_modules.add(node.module)
+    for forbidden in _EXECUTOR_FORBIDDEN:
+        for module in imported_modules:
+            assert module != forbidden and not module.startswith(forbidden + "."), (
+                f"forbidden import {forbidden} (saw {module}) in executor node closure"
             )
 
 
