@@ -19,13 +19,13 @@ from friday.harness.facts import FactLimits
 from friday.harness.graph import build_graph
 from friday.harness.nodes import Node, default_nodes
 from friday.harness.nodes.build_context import make_build_context
-from friday.harness.nodes.decide import make_decide
+from friday.harness.nodes.decide import _default_loader, make_decide
 from friday.harness.nodes.executor import ExecutorDeps, make_executor_node
 from friday.harness.nodes.finish import make_finish
 from friday.harness.nodes.guard import make_guard
 from friday.harness.nodes.observe import make_observe
 from friday.harness.nodes.settle import make_settle
-from friday.harness.nodes.verify import make_verify
+from friday.harness.nodes.verify import VerifyDeps, make_verify
 from friday.llm.base import VisionLLM
 
 # Nodes that must be real (not the default stub) for a live run. When a node
@@ -92,7 +92,7 @@ def build_production_graph(
     if deps.policy is not None:
         real["build_context"] = make_build_context(policy=deps.policy, limits=deps.limits)
         real["guard"] = make_guard(policy=deps.policy)
-    real["verify"] = make_verify()
+    real["verify"] = make_verify(deps=VerifyDeps(load_screenshot=_default_loader))
     real["finish"] = make_finish()
     if deps.executor is not None:
         real["executor"] = make_executor_node(deps.executor)

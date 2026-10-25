@@ -12,6 +12,10 @@ DEFAULT_RECURSION_LIMIT = 50
 # run-time safety net.
 DEFAULT_MAX_SECONDS: float = 3600.0
 
+# Consecutive failed/unchanged steps before the guard stops the run. verify
+# tracks stuck_count; the guard turns it into a stop verdict at this cap.
+DEFAULT_MAX_STUCK: int = 3
+
 # Workspace root used to validate file-path operations. The guard considers paths
 # that escape this root invalid regardless of what the model proposes.
 WORKSPACE_ROOT = Path("/config/friday-workspace")

@@ -183,6 +183,36 @@ class _BudgetConfig:
     workspace_root = "/config/friday-workspace"
     approval_required_categories = frozenset({"files", "processes", "windows"})
     max_seconds = 10.0
+    max_stuck = 3
+
+
+def test_stuck_count_at_cap_stops() -> None:
+    node = _guard(config=_BudgetConfig())
+    pending = {"action": "left_click", "x": 100, "y": 200}
+
+    result = node(_state(pending_action=pending, stuck_count=3))
+
+    assert result["guard_verdict"] == "stop"
+    assert "stuck" in result["hint"]
+
+
+def test_stuck_count_above_cap_stops() -> None:
+    node = _guard(config=_BudgetConfig())
+    pending = {"action": "left_click", "x": 100, "y": 200}
+
+    result = node(_state(pending_action=pending, stuck_count=5))
+
+    assert result["guard_verdict"] == "stop"
+    assert "stuck" in result["hint"]
+
+
+def test_stuck_count_below_cap_unaffected() -> None:
+    node = _guard(config=_BudgetConfig())
+    pending = {"action": "left_click", "x": 100, "y": 200}
+
+    result = node(_state(pending_action=pending, stuck_count=2))
+
+    assert result["guard_verdict"] == "allow"
 
 
 def test_time_budget_exhaustion_stops() -> None:

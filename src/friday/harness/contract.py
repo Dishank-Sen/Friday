@@ -52,6 +52,7 @@ GUARD = NodeContract(
             "started_at",
             "status",
             "step",
+            "stuck_count",
         }
     ),
     writes=frozenset({"guard_verdict", "hint"}),
@@ -83,10 +84,20 @@ SETTLE = NodeContract(
 
 VERIFY = NodeContract(
     reads=frozenset(
-        {"decision", "pending_action", "last_result", "history", "step", "stuck_count"}
+        {
+            "decision",
+            "pending_action",
+            "last_result",
+            "history",
+            "step",
+            "stuck_count",
+            "screenshot_path",
+            "prev_screenshot_path",
+            "hint",
+        }
     ),
     writes=frozenset(
-        {"step", "history", "stuck_count", "final_report", "status"}
+        {"step", "history", "stuck_count", "hint"}
     ),
 )
 

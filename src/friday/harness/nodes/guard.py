@@ -23,6 +23,7 @@ from friday.harness.capabilities import ControlPolicy, requires_approval
 from friday.harness.config import (
     APPROVAL_REQUIRED_CATEGORIES,
     DEFAULT_MAX_SECONDS,
+    DEFAULT_MAX_STUCK,
     WORKSPACE_ROOT,
 )
 from friday.harness.state import AgentState
@@ -42,6 +43,7 @@ class GuardConfig(Protocol):
     workspace_root: str
     approval_required_categories: frozenset[str]
     max_seconds: float | None
+    max_stuck: int
 
 
 class _GuardConfig:
@@ -50,10 +52,12 @@ class _GuardConfig:
         workspace_root: str,
         approval_required_categories: frozenset[str],
         max_seconds: float | None = DEFAULT_MAX_SECONDS,
+        max_stuck: int = DEFAULT_MAX_STUCK,
     ) -> None:
         self.workspace_root = workspace_root
         self.approval_required_categories = approval_required_categories
         self.max_seconds = max_seconds
+        self.max_stuck = max_stuck
 
 
 def _default_config() -> GuardConfig:
@@ -112,6 +116,8 @@ def make_guard(
         # Budgets.
         if state.get("step", 0) >= state.get("max_steps", 0):
             return {"guard_verdict": "stop", "hint": "step budget exhausted"}
+        if (state.get("stuck_count") or 0) >= cfg.max_stuck:
+            return {"guard_verdict": "stop", "hint": "stuck: screen did not change"}
         if state.get("retries", 0) <= 0:
             return {"guard_verdict": "reject", "hint": "retry budget exhausted"}
         if cfg.max_seconds is not None:

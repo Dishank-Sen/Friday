@@ -376,7 +376,9 @@ def test_production_graph_full_loop_executes_settles_verifies_terminal_state() -
     assert executed == ["left_click"]
     # the loop advanced step (0 -> 1) and wrote a history record passed through verify
     assert result["step"] == 1
-    assert result["history"][-1]["outcome"] == "succeeded"
+    # screenshot paths point at the fake trace, so the diff is unreliable and
+    # the outcome is honestly 'unknown' — verify still records the step
+    assert result["history"][-1]["outcome"] == "unknown"
     # finish resolved the terminal status to done
     assert result["status"] == "done"
 
@@ -456,5 +458,8 @@ def test_production_graph_full_loop_dispatches_an_operation_and_terminates() -> 
 
     assert len(executed) == 1
     assert isinstance(executed[0], OpenUrl)
-    assert result["history"][-1]["outcome"] == "succeeded"
+    # the fake trace has no real pre/post screenshots, so the outcome is
+    # honestly 'unknown'; verify still recorded the operation and ok
+    assert result["history"][-1]["outcome"] == "unknown"
+    assert result["history"][-1]["ok"] is True
     assert result["status"] == "done"

@@ -40,10 +40,10 @@ docs cannot disagree:
 | observe | — | final_report, focused_app, screen_size, screenshot_path, status, windows |
 | build_context | focused_app, goal, guard_verdict, hint, history, last_result, max_steps, pending_action, retries, screen_size, screenshot_path, step, windows | hint, prompt |
 | decide | prompt, screenshot_path | decision, hint, pending_action, retries |
-| guard | focused_app, history, max_steps, pending_action, retries, screen_size, started_at, status, step | guard_verdict, hint |
+| guard | focused_app, history, max_steps, pending_action, retries, screen_size, started_at, status, step, stuck_count | guard_verdict, hint |
 | executor | guard_verdict, pending_action | last_result |
 | settle | screenshot_path | focused_app, prev_screenshot_path, screen_size, screenshot_path, windows |
-| verify | decision, history, last_result, pending_action, step, stuck_count | final_report, history, status, step, stuck_count |
+| verify | decision, hint, history, last_result, pending_action, prev_screenshot_path, screenshot_path, step, stuck_count | hint, history, step, stuck_count |
 | finish | decision, final_report, guard_verdict, hint, status | final_report, status |
 <!-- GEN:node-contract -->
 ```
@@ -71,14 +71,26 @@ Approval and user-control status for a step are not state fields; they are carri
 | --- | --- | --- | --- |
 | observe | nothing | screenshot_path, screen_size, windows, focused_app; on fatal capture failure status, final_report | route_after_observe |
 | decide | prompt, screenshot_path | decision, pending_action, retries, hint | route_after_decide |
-| guard | pending_action, screen_size, budgets, history, stuck_count, focused_app, status | guard_verdict, hint, stuck_count | route_after_guard |
+| guard | pending_action, screen_size, budgets, history, stuck_count, focused_app, status | guard_verdict, hint | route_after_guard |
 | executor | pending_action | last_result | settle |
 | settle | screenshot_path | prev_screenshot_path, screenshot_path, screen_size, windows, focused_app | verify |
-| verify | screenshot paths, last_result, decision, pending_action, history, step, stuck_count | step, history, stuck_count; on stuck final_report, status | build_context |
+| verify | screenshot paths, last_result, decision, pending_action, history, step, stuck_count | step, history, stuck_count, hint | build_context |
 | build_context | goal, screen_size, windows, focused_app, history, last_result, hint, step, max_steps, retries, status, pending_action, guard_verdict | prompt, hint | decide |
 | finish | status, final_report, decision, guard_verdict, hint | status, final_report | END |
 
-`step`, `history`, and `stuck_count` are written by `verify`, the reconciliation step, on every pass through the loop. That is what lets the guard's step budget and repeat check actually fire, so a live run terminates instead of recursing. `finish` resolves the terminal `status`/`final_report` from the decision, verdict, or a prior failure; `final_report`/`status` written earlier (observe failure, verify stuck) are preserved.
+`step`, `history`, and `stuck_count` are written by `verify`, the single owner,
+on every pass through the loop. That is what lets the guard's step budget and
+repeat check actually fire, so a live run terminates instead of recursing.
+`verify` compares the pre/post screenshots (see `verify_diff`) to label the step
+`failed` / `no_visible_change` / `changed` / `no_change_expected` / `unknown`,
+increments `stuck_count` on a failure or screen-stall, resets it on a change,
+and writes a fixed `hint` for a stalled step (never overwriting an existing
+hint). A run that stops because the screen stopped changing is bounded by the
+guard: once `stuck_count >= max_stuck`, the guard returns `stop` (at the cost of
+one extra `decide` call before it does), and `finish` carries why into the final
+report. `finish` resolves the terminal `status`/`final_report`; a failure set
+earlier (observe capture, or a stuck run) is preserved. A
+`route_after_verify` shortcut is deferred.
 
 Expected execution failures belong in `last_result` with `ok: false`; they do not raise. Only routing reads `decision` or `guard_verdict`: `None` logs a warning and goes to finish, while an unknown value raises `ValueError`.
 
@@ -154,14 +166,16 @@ run in another process still has an interpretable budget). The guard treats
 
 ## Known gaps
 
-`step`, `history`, and `stuck_count` are written by `verify` on every pass
-through the loop, so the guard's step budget and repeat suppression now fire and
-a live run terminates. `started_at` is stamped by the runner. Remaining gaps:
-`finish` resolves the terminal status but does not yet run host-side
-`release_all` (held input on an abnormal end is documented in `executor_node.md`),
-and screenshot diffing in `verify` is not yet implemented — `verify` today judges
-success from `last_result`. A `max_steps` run that never reaches `done` still
-terminates via the guard's budget and reports `stopped`.
+`step`, `history`, and `stuck_count` are written by `verify` (the single owner)
+on every pass, so the guard's step budget, repeat suppression, and stuck-stop
+now fire and a live run terminates. `started_at` is stamped by the runner.
+Remaining gaps: `finish` resolves the terminal status but does not yet run
+host-side `release_all` (held input on an abnormal end is documented in
+`executor_node.md`), the browser probe and settle's use of it are not yet wired,
+and the screenshot-diff tuning defaults (`tolerance`, `min_changed_ratio`,
+`ignore_regions`) must be tuned on the real container. `verify` judges an
+unusable diff as `unknown` rather than raising. A `max_steps` run that never
+reaches `done` still terminates via the guard's budget and reports `stopped`.
 
 ## Not in this skeleton
 

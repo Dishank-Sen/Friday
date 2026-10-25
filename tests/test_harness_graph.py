@@ -215,3 +215,67 @@ def test_replacing_one_node_keeps_default_nodes() -> None:
     build_graph(nodes).invoke(initial_state("goal", 1))
 
     assert calls == ["replacement_decide"]
+
+
+def test_stuck_run_ends_with_guard_stop_and_finish_report() -> None:
+    """Three no-change steps drive stuck_count up; the guard stops; finish reports."""
+    from friday.harness.nodes.finish import make_finish
+    from friday.harness.nodes.guard import make_guard
+    from friday.harness.nodes.verify import VerifyDeps, make_verify
+
+    class _Policy:
+        def policy(self, state):  # noqa: ANN001
+            from friday.harness.capabilities import ControlPolicy
+
+            return ControlPolicy(approval=True, user_control=False)
+
+    def loader(path):  # noqa: ANN001
+        return b"x"
+
+    class _Probe:
+        def state(self) -> dict:
+            return {"tab_count": 1}
+
+        def wait_ready(self, timeout_s: float) -> dict:
+            return {"state": "ready", "waited_ms": 0}
+
+    calls: list[str] = []
+
+    def build_context(state):  # noqa: ANN001
+        calls.append("build_context")
+        return {"prompt": "x"}
+
+    def decide(state):  # noqa: ANN001
+        calls.append("decide")
+        return {"decision": "action", "pending_action": {"action": "left_click", "x": 1, "y": 2}}
+
+    class _Config:
+        workspace_root = "/config/friday-workspace"
+        approval_required_categories = frozenset({"files", "processes", "windows"})
+        max_seconds = None
+        max_stuck = 3
+
+    real_guard = make_guard(policy=_Policy(), config=_Config())
+    real_verify = make_verify(
+        deps=VerifyDeps(load_screenshot=loader, probe=_Probe())
+    )
+    real_finish = make_finish()
+
+    base = default_nodes()
+    nodes = replace(
+        base,
+        decide=decide,
+        guard=real_guard,
+        verify=real_verify,
+        finish=real_finish,
+        build_context=build_context,
+    )
+
+    state = initial_state("open a page", 10)
+    state["retries"] = 2
+    result = build_graph(nodes).invoke(state, config={"recursion_limit": 50})
+
+    # stuck_count reached the cap, guard stopped, finish carried the reason
+    assert result["stuck_count"] >= 3
+    assert result["status"] == "stopped"
+    assert "stuck" in result["final_report"]
