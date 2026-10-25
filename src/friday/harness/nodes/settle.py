@@ -20,6 +20,8 @@ def make_settle(
     client: object,
     trace_writer: object,
     focus_table: Callable[[str | None], str],
+    probe: object | None = None,
+    wait_timeout_s: float = 5.0,
 ) -> Callable[[AgentState], dict]:
     """Create a settle node that refreshes the observation after an action.
 
@@ -30,6 +32,12 @@ def make_settle(
     state. On a capture failure it leaves the prior capture in place and returns
     no path field (fail-closed on the refresh), rather than claiming a new state
     it did not observe.
+
+    When an optional read-only ``probe`` is supplied and the focused app is a
+    browser, it first calls ``probe.wait_ready(wait_timeout_s)`` so the fresh
+    capture is of a page that has finished loading. The wait is best-effort: a
+    probe failure, absence or timeout never breaks settle's contract — the
+    capture and refresh proceed as usual.
     """
 
     def run(state: AgentState) -> dict:
@@ -38,6 +46,8 @@ def make_settle(
         previous = state.get("screenshot_path")
         if previous:
             update["prev_screenshot_path"] = previous
+        if probe is not None and state.get("focused_app") == "browser":
+            _wait_for_page(probe, wait_timeout_s)
         try:
             observation = client.observation()
         except Exception as error:
@@ -51,3 +61,13 @@ def make_settle(
         return update
 
     return run
+
+
+def _wait_for_page(probe: object, timeout_s: float) -> None:
+    """Best-effort wait for the active browser tab to finish loading."""
+    if not hasattr(probe, "wait_ready"):
+        return
+    try:
+        probe.wait_ready(timeout_s)
+    except Exception as error:
+        LOGGER.info("harness settle browser wait_ready failed: %s", error)

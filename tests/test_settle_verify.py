@@ -45,10 +45,24 @@ def _focus(table_class):  # noqa: ANN001, ANN202
     return "browser"
 
 
-def _settle(client=None, trace=None, focus=None):  # noqa: ANN001
+def _settle(client=None, trace=None, focus=None, probe=None):  # noqa: ANN001
     return make_settle(
-        client or _Client(), trace or _Trace(), focus or _focus
+        client or _Client(), trace or _Trace(), focus or _focus, probe=probe
     )
+
+
+class _Probe:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def wait_ready(self, timeout_s: float) -> dict:
+        self.calls += 1
+        return {"state": "ready", "waited_ms": int(timeout_s * 1000)}
+
+
+class _FailingProbe:
+    def wait_ready(self, timeout_s: float) -> dict:
+        raise RuntimeError("probe down")
 
 
 def _base(**overrides) -> dict:
@@ -105,4 +119,54 @@ def test_settle_survives_observation_failure_without_losing_prior_path() -> None
     # the prior capture is unchanged on failure; no fields are invented
     assert result.get("prev_screenshot_path") == "/traces/previous.png"
     assert "screenshot_path" not in result
+
+
+# --- settle with the optional browser probe -----------------------------------
+
+
+def test_settle_waits_for_page_when_focused_app_is_browser() -> None:
+    probe = _Probe()
+    client = _Client()
+    node = _settle(client=client, trace=_Trace(), probe=probe)
+    state = _base(screenshot_path="/traces/previous.png")
+    state["focused_app"] = "browser"
+
+    result = node(state)
+
+    assert probe.calls == 1
+    assert result["focused_app"] == "browser"
+
+
+def test_settle_does_not_wait_when_focused_app_is_not_browser() -> None:
+    probe = _Probe()
+    node = _settle(client=_Client(), trace=_Trace(), probe=probe)
+    state = _base(screenshot_path="/traces/previous.png")
+    state["focused_app"] = "terminal"
+
+    result = node(state)
+
+    assert probe.calls == 0
+    assert result["focused_app"] == "browser"  # focus_table returns the fresh class
+
+
+def test_settle_does_not_wait_without_a_probe() -> None:
+    node = _settle(client=_Client(), trace=_Trace(), probe=None)
+    state = _base(screenshot_path="/traces/previous.png")
+    state["focused_app"] = "browser"
+
+    result = node(state)
+
+    assert result["focused_app"] == "browser"
+
+
+def test_settle_probe_failure_is_best_effort() -> None:
+    node = _settle(client=_Client(), trace=_Trace(), probe=_FailingProbe())
+    state = _base(screenshot_path="/traces/previous.png")
+    state["focused_app"] = "browser"
+
+    result = node(state)
+
+    # a probe failure must not break settle's contract: capture still refreshes
+    assert result["screenshot_path"].startswith("/traces/")
+    assert result["focused_app"] == "browser"
 

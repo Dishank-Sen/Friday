@@ -42,7 +42,7 @@ docs cannot disagree:
 | decide | prompt, screenshot_path | decision, hint, pending_action, retries |
 | guard | focused_app, history, max_steps, pending_action, retries, screen_size, started_at, status, step, stuck_count | guard_verdict, hint |
 | executor | guard_verdict, pending_action | last_result |
-| settle | screenshot_path | focused_app, prev_screenshot_path, screen_size, screenshot_path, windows |
+| settle | focused_app, screenshot_path | focused_app, prev_screenshot_path, screen_size, screenshot_path, windows |
 | verify | decision, hint, history, last_result, pending_action, prev_screenshot_path, screenshot_path, step, stuck_count | hint, history, step, stuck_count |
 | finish | decision, final_report, guard_verdict, hint, status | final_report, status |
 <!-- GEN:node-contract -->
@@ -73,7 +73,7 @@ Approval and user-control status for a step are not state fields; they are carri
 | decide | prompt, screenshot_path | decision, pending_action, retries, hint | route_after_decide |
 | guard | pending_action, screen_size, budgets, history, stuck_count, focused_app, status | guard_verdict, hint | route_after_guard |
 | executor | pending_action | last_result | settle |
-| settle | screenshot_path | prev_screenshot_path, screenshot_path, screen_size, windows, focused_app | verify |
+| settle | screenshot_path, focused_app | prev_screenshot_path, screenshot_path, screen_size, windows, focused_app | verify |
 | verify | screenshot paths, last_result, decision, pending_action, history, step, stuck_count | step, history, stuck_count, hint | build_context |
 | build_context | goal, screen_size, windows, focused_app, history, last_result, hint, step, max_steps, retries, status, pending_action, guard_verdict | prompt, hint | decide |
 | finish | status, final_report, decision, guard_verdict, hint | status, final_report | END |
@@ -90,7 +90,10 @@ guard: once `stuck_count >= max_stuck`, the guard returns `stop` (at the cost of
 one extra `decide` call before it does), and `finish` carries why into the final
 report. `finish` resolves the terminal `status`/`final_report`; a failure set
 earlier (observe capture, or a stuck run) is preserved. A
-`route_after_verify` shortcut is deferred.
+`route_after_verify` shortcut is deferred. Before settling, if the focused app
+is a browser and a probe is injected, `settle` best-effort waits for the page to
+finish loading so the screenshot that `verify` diffs is of a stable page; a
+probe failure, absence or timeout never breaks the settle contract.
 
 Expected execution failures belong in `last_result` with `ok: false`; they do not raise. Only routing reads `decision` or `guard_verdict`: `None` logs a warning and goes to finish, while an unknown value raises `ValueError`.
 
@@ -171,11 +174,13 @@ on every pass, so the guard's step budget, repeat suppression, and stuck-stop
 now fire and a live run terminates. `started_at` is stamped by the runner.
 Remaining gaps: `finish` resolves the terminal status but does not yet run
 host-side `release_all` (held input on an abnormal end is documented in
-`executor_node.md`), the browser probe and settle's use of it are not yet wired,
-and the screenshot-diff tuning defaults (`tolerance`, `min_changed_ratio`,
-`ignore_regions`) must be tuned on the real container. `verify` judges an
-unusable diff as `unknown` rather than raising. A `max_steps` run that never
-reaches `done` still terminates via the guard's budget and reports `stopped`.
+`executor_node.md`), and the screenshot-diff tuning defaults (`tolerance`,
+`min_changed_ratio`, `ignore_regions`) must be tuned on the real container.
+`verify` judges an unusable diff as `unknown` rather than raising. A `max_steps`
+run that never reaches `done` still terminates via the guard's budget and
+reports `stopped`. The read-only browser probe is wired: `settle` optionally
+waits for page load when the focused app is a browser and `verify` records
+browser facts when a probe is supplied, both best-effort and never raising.
 
 ## Not in this skeleton
 

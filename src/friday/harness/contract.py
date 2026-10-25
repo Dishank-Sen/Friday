@@ -76,7 +76,7 @@ EXECUTOR = NodeContract(
 )
 
 SETTLE = NodeContract(
-    reads=frozenset({"screenshot_path"}),
+    reads=frozenset({"screenshot_path", "focused_app"}),
     writes=frozenset(
         {"prev_screenshot_path", "screenshot_path", "screen_size", "windows", "focused_app"}
     ),

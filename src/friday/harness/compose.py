@@ -87,7 +87,9 @@ def build_production_graph(
     if deps.client is not None and deps.trace_writer is not None:
         focus = deps.focus_table or (lambda _class: "other")
         real["observe"] = make_observe(deps.client, deps.trace_writer, focus)
-        real["settle"] = make_settle(deps.client, deps.trace_writer, focus)
+        real["settle"] = make_settle(
+            deps.client, deps.trace_writer, focus, probe=deps.browser_probe
+        )
     if deps.llm is not None:
         real["decide"] = make_decide(llm=deps.llm)
     if deps.policy is not None:

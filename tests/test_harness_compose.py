@@ -463,3 +463,83 @@ def test_production_graph_full_loop_dispatches_an_operation_and_terminates() -> 
     assert result["history"][-1]["outcome"] == "unknown"
     assert result["history"][-1]["ok"] is True
     assert result["status"] == "done"
+
+def test_production_graph_settle_waits_with_browser_probe() -> None:
+    """When a probe is supplied and the focused app is a browser, settle waits.
+
+    The probe is threaded through ProductionDeps into both settle and verify; a
+    browser-focused run should call wait_ready once during settle.
+    """
+    from friday.harness.nodes.executor import ExecutorDeps
+    from friday.harness.steps import ExecutorSettings
+
+    waited: list[float] = []
+
+    class _Probe:
+        def state(self) -> dict:
+            return {"tab_count": 1, "url": "https://github.com", "ready_state": "complete"}
+
+        def wait_ready(self, timeout_s: float) -> dict:
+            waited.append(timeout_s)
+            return {"state": "ready", "waited_ms": 0}
+
+    class _Ex:
+        def execute(self, action):  # noqa: ANN001, ANN202
+            from friday.actions.models import ActionResult
+
+            return ActionResult(ok=True)
+
+    class _Tr:
+        def __init__(self) -> None:
+            import tempfile
+
+            self._f = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            self._f.write(b"\x89PNG\r\n\x1a\n")
+            self._f.close()
+            self._path = self._f.name
+
+        def write(self, observation, error=None):
+            return self._path
+
+        def write_image(self, step_index: int, name: str, png: bytes) -> str:
+            return f"{self._path}#{name}"
+
+    class _Policy:
+        def policy(self, state):  # noqa: ANN001
+            from friday.harness.capabilities import ControlPolicy
+
+            return ControlPolicy(approval=True, user_control=False)
+
+    class _ActionThenDone:
+        def __init__(self) -> None:
+            self.count = 0
+
+        def invoke(self, prompt, images):  # noqa: ANN001
+            from friday.llm.base import LLMResponse
+
+            self.count += 1
+            if self.count == 1:
+                return LLMResponse(
+                    text='{"decision": "action", "pending_action": '
+                    '{"action": "left_click", "x": 1, "y": 2}}'
+                )
+            return LLMResponse(text='{"decision": "done"}')
+
+    deps = ProductionDeps(
+        client=_FakeClient(),
+        trace_writer=_Tr(),
+        focus_table=lambda _c: "browser",
+        llm=_ActionThenDone(),
+        policy=_Policy(),
+        executor=ExecutorDeps(executor=_Ex(), trace_writer=_Tr(), settings=ExecutorSettings()),
+        browser_probe=_Probe(),
+    )
+    graph = build_production_graph(deps)
+    state = initial_state("open a web page", 5)
+    state["retries"] = 2
+    state["focused_app"] = "browser"
+
+    result = graph.invoke(state, config={"recursion_limit": 50})
+
+    assert waited, "settle should have called probe.wait_ready for a browser"
+    assert result["history"][-1].get("browser")  # verify also recorded browser facts
