@@ -20,6 +20,7 @@ from friday.harness.graph import build_graph
 from friday.harness.nodes import Node, default_nodes
 from friday.harness.nodes.build_context import make_build_context
 from friday.harness.nodes.decide import make_decide
+from friday.harness.nodes.executor import ExecutorDeps, make_executor_node
 from friday.harness.nodes.guard import make_guard
 from friday.harness.nodes.observe import make_observe
 from friday.llm.base import VisionLLM
@@ -28,6 +29,13 @@ from friday.llm.base import VisionLLM
 # becomes implemented, add its name here: a one-line change. Keeping this as the
 # single source lets ``build_production_graph`` fail closed on any unwired slot.
 REQUIRED_REAL: frozenset[str] = frozenset({"observe", "build_context", "decide", "guard"})
+
+# Pairs that must be real *together*: if the first member is real, the second
+# must be real too, else the produced graph is unsound. Adding a pair is one
+# line. ``allow_stubs`` bypasses both checks.
+REQUIRED_TOGETHER: frozenset[tuple[str, str]] = frozenset(
+    {("executor", "settle"), ("executor", "verify")}
+)
 
 
 class ConfigurationError(ValueError):
@@ -55,6 +63,9 @@ class ProductionDeps:
     llm: VisionLLM | None = None
     policy: PolicyProvider | None = None
     limits: FactLimits | None = None
+    executor: ExecutorDeps | None = None
+    settle: Node | None = None
+    verify: Node | None = None
 
 
 def build_production_graph(
@@ -84,6 +95,12 @@ def build_production_graph(
     if deps.policy is not None:
         real["build_context"] = make_build_context(policy=deps.policy, limits=deps.limits)
         real["guard"] = make_guard(policy=deps.policy)
+    if deps.executor is not None:
+        real["executor"] = make_executor_node(deps.executor)
+    if deps.settle is not None:
+        real["settle"] = deps.settle
+    if deps.verify is not None:
+        real["verify"] = deps.verify
 
     nodes = replace(base, **real)
 
@@ -93,5 +110,13 @@ def build_production_graph(
                 raise ConfigurationError(
                     f"{name} is still the default stub; provide the dependencies "
                     f"required to make it real before running live"
+                )
+        for first, second in REQUIRED_TOGETHER:
+            first_real = getattr(nodes, first) is not getattr(base, first)
+            second_is_stub = getattr(nodes, second) is getattr(base, second)
+            if first_real and second_is_stub:
+                raise ConfigurationError(
+                    f"a real {first} requires a real {second}; a {first} with a "
+                    f"stub {second} would act on stale state"
                 )
     return build_graph(nodes, checkpointer=checkpointer)

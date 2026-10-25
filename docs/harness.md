@@ -112,16 +112,22 @@ graph = build_graph(replace(default_nodes(), decide=my_decide))
 
 `friday.harness.compose.build_production_graph(deps)` is the single assembly
 point for a live graph. It builds the real `observe`, `build_context`, `decide`,
-and `guard` nodes from their factories and `dataclasses.replace`s them onto
-`default_nodes()`, leaving the remaining slots as stubs. The `REQUIRED_REAL`
-frozenset names the nodes that must not be stubs for a live run; when one is
-still a stub the builder raises `ConfigurationError` naming it, rather than
-silently running unwired. To promote a node to real, add its factories to
-`build_production_graph` and its name to `REQUIRED_REAL` (a one-line change).
+`guard`, and `executor` nodes from their factories and `dataclasses.replace`s
+them onto `default_nodes()`, leaving the remaining slots as stubs. The
+`REQUIRED_REAL` frozenset names the nodes that must not be stubs for a live run;
+when one is still a stub the builder raises `ConfigurationError` naming it,
+rather than silently running unwired. To promote a node to real, add its
+factories to `build_production_graph` and its name to `REQUIRED_REAL`.
 
-All live CLI paths — `friday run` today — go through `build_production_graph`
-rather than assembling nodes inline. Checkpointing is passed through the
-builder's `checkpointer` argument.
+The `REQUIRED_TOGETHER` table adds one-line rules that two nodes must be real
+together: today a real `executor` requires real `settle` and `verify`, so a
+live run cannot act on stale state. `allow_stubs` bypasses both checks.
+
+All live CLI paths — `friday run` and `friday exec-once` today — assemble the
+graph through `build_production_graph` rather than composing nodes inline.
+Checkpointing is passed through the builder's `checkpointer` argument.
+`friday exec-once '<action json>'` runs the real guard and, if it allows, the
+real executor against a running sandbox — no model call, no graph.
 
 **Time budget.** `started_at` is stamped by the runner (the CLI sets it from the
 injected wall clock `time.time()` before the first node runs, so a checkpointed

@@ -20,7 +20,11 @@ from friday.executor.remote import RemoteExecutor
 from friday.graph.locate import LocateRunner
 from friday.harness.capabilities import ControlPolicy
 from friday.harness.compose import ProductionDeps, build_production_graph
+from friday.harness.nodes.executor import ExecutorDeps, make_executor_node
+from friday.harness.nodes.guard import make_guard
+from friday.harness.nodes.observe import make_observe
 from friday.harness.state import initial_state
+from friday.harness.steps import ExecutorSettings
 from friday.harness.trace import ObservationTraceWriter
 from friday.llm import LLMError, create_llm
 from friday.llm.config import LLMSettings
@@ -64,6 +68,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     run_cmd.add_argument("goal", help="task/prompt to decide on")
     run_cmd.add_argument("--trace-dir", type=Path, default=Path(".friday-traces"))
+    exec_once = subparsers.add_parser(
+        "exec-once", help="run the real guard then executor against a live sandbox"
+    )
+    exec_once.add_argument("action", help="JSON action object to execute if guard allows")
+    exec_once.add_argument("--trace-dir", type=Path, default=Path(".friday-traces"))
     return parser
 
 
@@ -148,6 +157,8 @@ def main() -> int:
             return _locate(args)
         if args.command == "run":
             return _run_task(args)
+        if args.command == "exec-once":
+            return _exec_once(args)
         sandbox = _load_sandbox()
         if args.command == "status":
             sandbox.wait_until_ready()
@@ -219,6 +230,58 @@ class _CliPolicy:
 
     def policy(self, state):  # noqa: ANN001, ANN201
         return ControlPolicy(approval=True, user_control=False)
+
+
+def _exec_once(args: argparse.Namespace, print=print) -> int:
+    """Run the real guard then executor on one action, with no model or graph.
+
+    Builds state from a real observation (the observe node), evaluates the real
+    guard, and only if it allows, runs the real executor node. Prints the
+    verdict/hint, the last_result, and where any observation image was saved.
+    """
+    try:
+        action = parse_action(args.action)
+    except (ValueError, TypeError) as error:
+        print(f"Friday: invalid action: {error}")
+        return 1
+
+    sandbox = _load_sandbox()
+    with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as desktop:
+        state = initial_state("exec-once", 5)
+        state["started_at"] = time.time()
+
+        observe_node = make_observe(
+            desktop, ObservationTraceWriter(args.trace_dir), focused_app_for
+        )
+        state.update(observe_node(state))
+        state["pending_action"] = {"action": action.action}
+
+        guard_node = make_guard(policy=_CliPolicy())
+        verdict_update = guard_node(state)
+        verdict = verdict_update.get("guard_verdict")
+        hint = verdict_update.get("hint")
+        print(f"guard verdict: {verdict}")
+        if hint:
+            print(f"guard hint: {hint}")
+
+        if verdict != "allow":
+            return 0
+
+        state.update(verdict_update)
+        state["guard_verdict"] = verdict
+        executor_node = make_executor_node(
+            ExecutorDeps(
+                executor=RemoteExecutor(desktop),
+                trace_writer=ObservationTraceWriter(args.trace_dir),
+                settings=ExecutorSettings(),
+            )
+        )
+        update = executor_node(state)
+        last_result = update.get("last_result") or {}
+        print("last_result: " + json.dumps(last_result, sort_keys=True))
+        if last_result.get("image_path"):
+            print(f"image saved: {last_result['image_path']}")
+    return 0
 
 
 def _locate(args: argparse.Namespace) -> int:
