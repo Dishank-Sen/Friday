@@ -31,7 +31,7 @@ class FakeRunner:
         self.active_class = active_class
         self._lock = threading.Lock()
 
-    def run(self, argv: list[str]) -> str:
+    def run(self, argv: list[str], *, timeout: float = 10.0) -> str:
         with self._lock:
             self.active += 1
             self.max_active = max(self.max_active, self.active)

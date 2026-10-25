@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from friday.actions.config import MAX_DRAG_STEPS
+from friday.actions.config import MAX_DRAG_STEPS, timeout_for
 from friday.actions.keys import normalize_key
 from friday.actions.models import (
     Action,
@@ -199,8 +199,9 @@ class X11Backend:
                     self._runner.run(key_command(key))
             return ActionResult(ok=True)
         self._validate_action_bounds(action)
+        budget = timeout_for(action)
         for command in commands_for_action(action):
-            self._runner.run(command)
+            self._runner.run(command, timeout=budget)
         self._track_mouse_button(action)
         return ActionResult(ok=True)
 

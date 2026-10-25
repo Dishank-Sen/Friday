@@ -4,7 +4,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from friday.actions.models import MouseMoveAction, ZoomAction
+from friday.actions.models import MouseMoveAction, TypeAction, ZoomAction
 from friday.desktop.client import DesktopClient
 from friday.executor.remote import RemoteExecutor
 from friday.sandbox.base import Sandbox
@@ -20,12 +20,14 @@ def _png() -> bytes:
 class FakeClient:
     def __init__(self) -> None:
         self.sent = []
+        self.last_timeout: float | None = None
 
     def screenshot(self) -> bytes:
         return _png()
 
-    def execute(self, action: object):
+    def execute(self, action: object, timeout: float | None = None):
         self.sent.append(action)
+        self.last_timeout = timeout
         from friday.actions.models import ActionResult
 
         return ActionResult(ok=True)
@@ -61,6 +63,18 @@ def test_remote_executor_dispatches_action() -> None:
 
     assert executor.execute(action).ok
     assert client.sent == [action]
+
+
+def test_remote_executor_passes_action_timeout_to_client() -> None:
+    client = FakeClient()
+    executor = RemoteExecutor(client)  # type: ignore[arg-type]
+    action = TypeAction(action="type", text="x" * 500)
+
+    executor.execute(action)
+
+    # a long type has a budget > the default; assert a per-action timeout flowed
+    assert client.last_timeout is not None
+    assert client.last_timeout > 10.0
 
 
 def test_remote_executor_posts_to_mocked_server() -> None:

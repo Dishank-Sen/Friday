@@ -8,6 +8,7 @@ import signal
 import time
 from pathlib import Path
 
+from friday.actions.config import timeout_for
 from friday.operations.registry import (
     CloseApp,
     DeleteFile,
@@ -88,7 +89,7 @@ class SystemBackend:
             process = self._runner.start_with_stdin(argv, operation.text)
             self._clipboard_pid = process.pid
             return {"ok": True}
-        output = self._runner.run(argv, timeout=getattr(operation, "timeout", 10.0))
+        output = self._runner.run(argv, timeout=timeout_for(operation))
         if isinstance(operation, GetClipboard):
             return {"text": output}
         return {"output": output, "ok": True}

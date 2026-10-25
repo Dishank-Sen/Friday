@@ -11,6 +11,10 @@ class DesktopConnectionError(DesktopError):
     """The control server could not be reached."""
 
 
+class DesktopTimeoutError(DesktopConnectionError):
+    """The control server timed out responding to a request."""
+
+
 class DesktopRequestError(DesktopError):
     """The control server rejected a request or command."""
 

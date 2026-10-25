@@ -17,7 +17,7 @@ from friday.desktop.observation import ActiveWindow, Observation
 from friday.operations.registry import SystemOperation
 from friday.sandbox.base import Sandbox
 
-from .errors import DesktopConnectionError, DesktopRequestError
+from .errors import DesktopConnectionError, DesktopRequestError, DesktopTimeoutError
 
 
 class DesktopClient:
@@ -72,8 +72,12 @@ class DesktopClient:
     def active_window(self) -> ActiveWindow:
         return self._model("GET", "/active_window", ActiveWindow)
 
-    def execute(self, action: Action) -> ActionResult:
-        response = self._request("POST", "/action", json=action.model_dump(mode="json"))
+    def execute(
+        self, action: Action, timeout: float | None = None
+    ) -> ActionResult:
+        response = self._request(
+            "POST", "/action", json=action.model_dump(mode="json"), timeout=timeout
+        )
         try:
             return ActionResult.model_validate(response.json())
         except (TypeError, ValueError) as error:
@@ -98,13 +102,19 @@ class DesktopClient:
         self.execute(KeyAction(action="key", key=combo))
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        timeout = kwargs.pop("timeout", None)
+        request_kwargs: dict[str, Any] = kwargs
+        if timeout is not None:
+            request_kwargs["timeout"] = timeout
         try:
-            response = self._client.request(method, path, **kwargs)
+            response = self._client.request(method, path, **request_kwargs)
             response.raise_for_status()
             return response
         except httpx.HTTPStatusError as error:
             detail = error.response.text
             raise DesktopRequestError(error.response.status_code, detail) from error
+        except httpx.TimeoutException as error:
+            raise DesktopTimeoutError(str(error)) from error
         except httpx.RequestError as error:
             raise DesktopConnectionError(str(error)) from error
 

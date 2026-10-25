@@ -5,7 +5,11 @@ import pytest
 
 from friday.actions.models import MouseMoveAction
 from friday.desktop.client import DesktopClient
-from friday.desktop.errors import DesktopRequestError
+from friday.desktop.errors import (
+    DesktopConnectionError,
+    DesktopRequestError,
+    DesktopTimeoutError,
+)
 from friday.sandbox.base import Sandbox
 
 
@@ -89,3 +93,25 @@ def test_client_rejects_non_png_screenshot() -> None:
     with DesktopClient(FakeSandbox(), transport=transport) as client:
         with pytest.raises(DesktopRequestError, match="not a PNG"):
             client.screenshot()
+
+
+def test_client_timeout_is_a_typed_subclass_of_connection_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ANN001
+        raise httpx.TimeoutException("timed out")
+
+    with DesktopClient(FakeSandbox(), transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(DesktopTimeoutError, match="timed out") as exc_info:
+            client.screenshot()
+
+    assert isinstance(exc_info.value, DesktopConnectionError)
+
+
+def test_client_connection_error_is_not_a_timeout() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ANN001
+        raise httpx.ConnectError("could not connect")
+
+    with DesktopClient(FakeSandbox(), transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(DesktopConnectionError) as exc_info:
+            client.screenshot()
+
+    assert not isinstance(exc_info.value, DesktopTimeoutError)
