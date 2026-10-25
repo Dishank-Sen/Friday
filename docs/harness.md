@@ -137,6 +137,16 @@ run in another process still has an interpretable budget). The guard treats
 `elapsed = clock() - started_at` (clock injected for tests, defaulting to
 `time.time`) and returns `stop` once `elapsed >= max_seconds`.
 
+## Known gaps
+
+`started_at` is stamped by the runner; `step`, `history`, and `stuck_count`
+have **no writers** other than `initial_state` (`step`/`history`/`stuck_count`
+start at neutral values and nothing increments them). They are read — `guard`
+uses `step` for its step budget and `history` for repeat suppression — but never
+updated. The proposed owner is `verify` (it is the reconciliation step); until
+then the guard's step budget and repeat check cannot fire. Fixing these writers
+is a deliberate future task, not part of the executor work.
+
 ## Not in this skeleton
 
 - LLM calls

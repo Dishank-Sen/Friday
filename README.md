@@ -1,6 +1,6 @@
 # Friday
 
-Friday provides the environment and model-call layers for a future desktop-operating AI agent. It starts an Ubuntu XFCE desktop in Docker, exposes the desktop in a browser, provides a local authenticated HTTP API for screenshots and mouse and keyboard input, and can ask a vision model to locate a point. It does not yet run an agent loop or click anything from a model result.
+Friday provides the environment and model-call layers for a desktop-operating AI agent. It starts an Ubuntu XFCE desktop in Docker, exposes the desktop in a browser, provides a local authenticated HTTP API for screenshots and mouse and keyboard input, and can ask a vision model to locate a point. Its harness can observe the desktop, ask a model for the next decision, and — only when a guard allows — execute the action through the control API. It does not yet run a full multi-step agent loop with verification.
 
 ```
 Host Python app / RemoteExecutor -- HTTP --> control server -- X11Backend --> X display
@@ -38,6 +38,7 @@ python -m friday act '{"action":"shortcut","name":"browser_new_tab"}'
 python -m friday act '{"action":"screenshot"}' --screenshot out.png
 python -m friday operation '{"operation":"list_windows"}'
 python -m friday operation '{"operation":"open_url","url":"https://example.com"}'
+python -m friday exec-once '{"action":"left_click","x":100,"y":100}'
 python -m friday locate "open the terminal" --image s.png --annotate result.png
 python -m friday down
 ```
@@ -92,9 +93,13 @@ host-only: it crops and enlarges a PNG using Pillow and returns `ZoomView`, whos
 
 ## Agent harness skeleton
 
-The future agent decision-loop topology is isolated in `friday.harness`. All nodes
-except an injected initial observation implementation are safe no-op stubs; none call
-models or the executor. See [the harness design](docs/harness.md) and
+The agent decision-loop topology is isolated in `friday.harness`. `observe`,
+`build_context`, `decide`, `guard`, and `executor` are implemented and assembled
+through the composition root (`build_production_graph`); `settle`, `verify`, and
+`finish` are still safe no-op stubs. The executor node runs a guard-allowed
+action through the injected `Executor` and records the outcome in `last_result`
+— see [docs/executor_node.md](docs/executor_node.md). See [the harness
+design](docs/harness.md) and
 [observation contract](docs/observation.md) for state, routes, safe captured data,
 and the replacement pattern.
 
