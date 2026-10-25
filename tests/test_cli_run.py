@@ -65,8 +65,6 @@ def test_run_task_passes_desktop_client_and_policy_into_composition_root() -> No
 
 
 def test_run_task_feeds_goal_into_initial_state() -> None:
-    states: list[dict] = []
-
     def fake_build(deps, *, checkpointer=None, allow_stubs=False):
         return _Graph()
 
@@ -80,3 +78,34 @@ def test_run_task_feeds_goal_into_initial_state() -> None:
         __main__._run_task(_Args())
 
     assert initial.call_args.args[0] == "open the terminal"
+
+
+def test_run_task_stamps_started_at_before_the_graph_runs() -> None:
+    # The guard relies on started_at for its wall-clock time budget, so a live
+    # run must set it (using the injected wall clock) before the graph invokes.
+    invoked_with: dict = {}
+
+    def fake_initial(goal, max_steps):  # noqa: ANN001
+        return {"goal": goal, "started_at": 0.0}
+
+    class _G:
+        @staticmethod
+        def invoke(state):  # noqa: ANN001
+            invoked_with["started_at"] = state["started_at"]
+            return {"decision": "done"}
+
+    def fake_build(deps, *, checkpointer=None, allow_stubs=False):
+        return _G()
+
+    with patch("friday.__main__.build_production_graph", side_effect=fake_build), patch(
+        "friday.__main__.DesktopClient"
+    ), patch("friday.__main__.create_llm"), patch(
+        "friday.__main__._load_sandbox", return_value=_Sandbox()
+    ), patch("friday.__main__.initial_state", side_effect=fake_initial), patch(
+        "friday.__main__.time.time", return_value=1234.0
+    ):
+        __main__._run_task(_Args())
+
+    # started_at (0.0 from initial_state) must be replaced by the runner's wall
+    # clock stamp before the first node runs
+    assert invoked_with["started_at"] == 1234.0

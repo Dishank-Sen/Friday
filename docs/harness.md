@@ -38,7 +38,7 @@ docs cannot disagree:
 | observe | — | final_report, focused_app, screen_size, screenshot_path, status, windows |
 | build_context | focused_app, goal, guard_verdict, hint, history, last_result, max_steps, pending_action, retries, screen_size, screenshot_path, step, windows | hint, prompt |
 | decide | prompt, screenshot_path | decision, hint, pending_action, retries |
-| guard | focused_app, history, max_steps, pending_action, retries, screen_size, status, step | guard_verdict, hint |
+| guard | focused_app, history, max_steps, pending_action, retries, screen_size, started_at, status, step | guard_verdict, hint |
 <!-- GEN:node-contract -->
 ```
 
@@ -105,6 +105,29 @@ from friday.harness.nodes import default_nodes
 
 graph = build_graph(replace(default_nodes(), decide=my_decide))
 ```
+
+## Composition root and fail-closed wiring
+
+`friday.harness.compose.build_production_graph(deps)` is the single assembly
+point for a live graph. It builds the real `observe`, `build_context`, `decide`,
+and `guard` nodes from their factories and `dataclasses.replace`s them onto
+`default_nodes()`, leaving the remaining slots as stubs. The `REQUIRED_REAL`
+frozenset names the nodes that must not be stubs for a live run; when one is
+still a stub the builder raises `ConfigurationError` naming it, rather than
+silently running unwired. To promote a node to real, add its factories to
+`build_production_graph` and its name to `REQUIRED_REAL` (a one-line change).
+
+All live CLI paths — `friday run` today — go through `build_production_graph`
+rather than assembling nodes inline. Checkpointing is passed through the
+builder's `checkpointer` argument.
+
+**Time budget.** `started_at` is stamped by the runner (the CLI sets it from the
+injected wall clock `time.time()` before the first node runs, so a checkpointed
+run in another process still has an interpretable budget). The guard treats
+`started_at <= 0` as "unset": it logs a warning and skips the time check. When a
+`max_seconds` budget is configured, the guard computes
+`elapsed = clock() - started_at` (clock injected for tests, defaulting to
+`time.time`) and returns `stop` once `elapsed >= max_seconds`.
 
 ## Not in this skeleton
 

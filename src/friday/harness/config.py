@@ -6,6 +6,12 @@ from pathlib import Path
 
 DEFAULT_RECURSION_LIMIT = 50
 
+# Optional wall-clock budget for one harness run. The guard enforces it when a
+# ``started_at`` is set (the runner stamps it before the first node runs); an
+# elapsed time at or past this is a ``stop``. Default keeps the budget on as a
+# run-time safety net.
+DEFAULT_MAX_SECONDS: float = 3600.0
+
 # Workspace root used to validate file-path operations. The guard considers paths
 # that escape this root invalid regardless of what the model proposes.
 WORKSPACE_ROOT = Path("/config/friday-workspace")

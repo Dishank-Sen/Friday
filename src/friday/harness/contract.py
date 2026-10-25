@@ -49,6 +49,7 @@ GUARD = NodeContract(
             "pending_action",
             "retries",
             "screen_size",
+            "started_at",
             "status",
             "step",
         }

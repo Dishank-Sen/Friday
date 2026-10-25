@@ -14,12 +14,17 @@ anything: absent a proposal it rejects rather than executing.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import Any, Protocol
 
 from friday.actions.models import ShortcutAction, parse_action
 from friday.harness.capabilities import ControlPolicy, requires_approval
-from friday.harness.config import APPROVAL_REQUIRED_CATEGORIES, WORKSPACE_ROOT
+from friday.harness.config import (
+    APPROVAL_REQUIRED_CATEGORIES,
+    DEFAULT_MAX_SECONDS,
+    WORKSPACE_ROOT,
+)
 from friday.harness.state import AgentState
 from friday.operations.registry import parse_operation
 from friday.shortcuts.registry import ShortcutNotAvailable, resolve_shortcut
@@ -36,12 +41,19 @@ class PolicyProvider(Protocol):
 class GuardConfig(Protocol):
     workspace_root: str
     approval_required_categories: frozenset[str]
+    max_seconds: float | None
 
 
 class _GuardConfig:
-    def __init__(self, workspace_root: str, approval_required_categories: frozenset[str]) -> None:
+    def __init__(
+        self,
+        workspace_root: str,
+        approval_required_categories: frozenset[str],
+        max_seconds: float | None = DEFAULT_MAX_SECONDS,
+    ) -> None:
         self.workspace_root = workspace_root
         self.approval_required_categories = approval_required_categories
+        self.max_seconds = max_seconds
 
 
 def _default_config() -> GuardConfig:
@@ -59,6 +71,7 @@ def make_guard(
     parse: Callable[[dict], Any] | None = None,
     policy: PolicyProvider | None = None,
     config: GuardConfig | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> Callable[[AgentState], dict]:
     """Create a guard node with injectable dependencies.
 
@@ -66,8 +79,11 @@ def make_guard(
     registries (operation or input action). ``policy`` supplies approval /
     user-control status for this step; it should be wired to the same source as
     the build_context node so manual control blocks input here independently of
-    what the model was offered. ``config`` supplies the workspace root and the
-    approval-required categories.
+    what the model was offered. ``config`` supplies the workspace root, the
+    approval-required categories, and the optional wall-clock time budget
+    (``max_seconds``). ``clock`` is the injected wall clock; use ``time.time``
+    rather than a monotonic clock so the budget survives checkpointing a long run
+    to another process.
 
     Returns a partial state update with ``guard_verdict`` and, when not allowed,
     a recovery ``hint``. Any failure to validate the proposal is a rejection.
@@ -75,6 +91,7 @@ def make_guard(
     do_parse = parse or _authoritative_parse
     step_policy = policy.policy if policy is not None else _default_policy()
     cfg = config or _default_config()
+    now = clock or time.time
 
     def run(state: AgentState) -> dict:
         LOGGER.info("harness guard ran")
@@ -97,6 +114,12 @@ def make_guard(
             return {"guard_verdict": "stop", "hint": "step budget exhausted"}
         if state.get("retries", 0) <= 0:
             return {"guard_verdict": "reject", "hint": "retry budget exhausted"}
+        if cfg.max_seconds is not None:
+            started = state.get("started_at", 0.0)
+            if started > 0 and now() - started >= cfg.max_seconds:
+                return {"guard_verdict": "stop", "hint": "time budget exhausted"}
+            if started <= 0:
+                LOGGER.warning("harness guard time budget configured but started_at is unset")
 
         # Independent schema/registry validation of the proposed action.
         try:

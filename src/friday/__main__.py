@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -191,6 +192,7 @@ def _run_task(args: argparse.Namespace) -> int:
     max_steps = max(1, settings.max_retries + 10)
 
     state = initial_state(args.goal, max_steps)
+    state["started_at"] = time.time()
     with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as desktop:
         deps = ProductionDeps(
             client=desktop,

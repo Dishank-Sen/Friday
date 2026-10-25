@@ -172,6 +172,47 @@ def test_retry_budget_exhaustion_rejects() -> None:
     assert "retry budget" in result["hint"]
 
 
+def _clock_at(value: float):
+    def clock() -> float:
+        return value
+
+    return clock
+
+
+class _BudgetConfig:
+    workspace_root = "/config/friday-workspace"
+    approval_required_categories = frozenset({"files", "processes", "windows"})
+    max_seconds = 10.0
+
+
+def test_time_budget_exhaustion_stops() -> None:
+    node = _guard(config=_BudgetConfig(), clock=_clock_at(100.0))
+    pending = {"action": "left_click", "x": 100, "y": 200}
+
+    result = node(_state(pending_action=pending, started_at=10.0))
+
+    assert result["guard_verdict"] == "stop"
+    assert "time budget" in result["hint"]
+
+
+def test_within_time_budget_allows() -> None:
+    node = _guard(config=_BudgetConfig(), clock=_clock_at(15.0))
+    pending = {"action": "left_click", "x": 100, "y": 200}
+
+    result = node(_state(pending_action=pending, started_at=10.0))
+
+    assert result["guard_verdict"] == "allow"
+
+
+def test_unset_started_at_skips_time_budget() -> None:
+    node = _guard(config=_BudgetConfig(), clock=_clock_at(100.0))
+    pending = {"action": "left_click", "x": 100, "y": 200}
+    # started_at stays 0.0 (initial_state default): the time check is skipped
+    result = node(_state(pending_action=pending, started_at=0.0))
+
+    assert result["guard_verdict"] == "allow"
+
+
 # --- approval ----------------------------------------------------------------
 
 
