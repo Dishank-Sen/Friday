@@ -79,6 +79,9 @@ def _base_state(**overrides) -> dict:
 
 def _nodes() -> dict[str, object]:
     from friday.harness.nodes.decide import make_decide
+    from friday.harness.nodes.finish import make_finish
+    from friday.harness.nodes.settle import make_settle
+    from friday.harness.nodes.verify import make_verify
 
     return {
         "build_context": make_build_context(),
@@ -88,6 +91,9 @@ def _nodes() -> dict[str, object]:
         "executor": make_executor_node(
             ExecutorDeps(executor=_FakeExecutor(), trace_writer=_FakeTrace())
         ),
+        "settle": make_settle(_FakeClient(), _FakeTrace(), focused_app_for),
+        "verify": make_verify(),
+        "finish": make_finish(),
     }
 
 
@@ -105,6 +111,17 @@ def _case_state(name: str) -> dict:
         return _base_state(
             guard_verdict="allow", pending_action={"action": "left_click", "x": 1, "y": 2}
         )
+    if name == "settle":
+        return _base_state(screenshot_path="/prev/shot.png")
+    if name == "verify":
+        return _base_state(
+            decision="action",
+            pending_action={"action": "left_click", "x": 1, "y": 2},
+            last_result={"ok": True},
+            stuck_count=0,
+        )
+    if name == "finish":
+        return _base_state(decision="done", guard_verdict=None, hint=None)
     if name == "decide":
         return _base_state(prompt="a rendered prompt", screenshot_path=None)
     return _base_state()

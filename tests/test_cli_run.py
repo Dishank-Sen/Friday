@@ -82,6 +82,18 @@ def test_run_task_feeds_goal_into_initial_state() -> None:
     assert initial.call_args.args[0] == "open the terminal"
 
 
+def test_run_task_wires_a_real_executor_dependency() -> None:
+    seen: dict = {}
+
+    def fake_build(deps, *, checkpointer=None, allow_stubs=False):
+        seen["executor"] = deps.executor is not None
+        return _Graph()
+
+    _run(fake_build)
+
+    assert seen["executor"] is True
+
+
 def test_run_task_stamps_started_at_before_the_graph_runs() -> None:
     # The guard relies on started_at for its wall-clock time budget, so a live
     # run must set it (using the injected wall clock) before the graph invokes.
@@ -133,4 +145,5 @@ def test_run_task_prints_loop_diagnostic_on_recursion() -> None:
 
     joined = " ".join(captured)
     assert "[loop]" in joined
-    assert "stub executor" in joined
+    assert "kept deciding" in joined
+    assert "advances step" in joined

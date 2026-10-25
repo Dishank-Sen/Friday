@@ -207,13 +207,22 @@ def _run_task(args: argparse.Namespace) -> int:
 
     state = initial_state(args.goal, max_steps)
     state["started_at"] = time.time()
+    # Seed a retry budget: the guard rejects when retries <= 0, so a fresh task
+    # must start with headroom for a first action to be allowed.
+    state["retries"] = max(1, settings.max_retries)
+    trace_writer = ObservationTraceWriter(args.trace_dir)
     with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as desktop:
         deps = ProductionDeps(
             client=desktop,
-            trace_writer=ObservationTraceWriter(args.trace_dir),
+            trace_writer=trace_writer,
             focus_table=focused_app_for,
             llm=llm,
             policy=_CliPolicy(),
+            executor=ExecutorDeps(
+                executor=RemoteExecutor(desktop),
+                trace_writer=trace_writer,
+                settings=ExecutorSettings(),
+            ),
         )
         graph = build_production_graph(deps)
         try:
@@ -221,20 +230,27 @@ def _run_task(args: argparse.Namespace) -> int:
         except Exception as error:
             print(
                 "[loop] the graph did not terminate within "
-                f"{max_steps} steps. Likely cause: guard 'allow' routes into the "
-                "executor node, but `friday run` wires no executor dependency, so "
-                "the stub executor writes nothing and step is never advanced, "
-                "looping execute->settle->verify->build_context->decide."
+                f"{max_steps} steps. Likely cause: the model kept deciding 'action' "
+                "and the guard kept allowing without the goal completing. Check that "
+                "verifies advances step and the guard's budgets eventually stop."
             )
             raise error
 
-    print("=== decide output ===")
-    for key in ("decision", "pending_action", "retries"):
+    print("=== run result ===")
+    if result.get("status") == "failed":
+        print(f"failed: {result.get('final_report')}")
+        return 1
+    if result.get("status") == "stopped":
+        hint = result.get("hint")
+        print(f"stopped{': ' + hint if hint else ''}")
+        return 0
+    if result.get("status") == "done":
+        print("done")
+        print(f"final report: {result.get('final_report')}")
+        return 0
+    for key in ("decision", "pending_action", "step", "history"):
         if result.get(key) is not None:
             print(f"{key}: {json.dumps(result[key], sort_keys=True)}")
-    if result.get("status") == "failed":
-        print(f"observation failed: {result.get('final_report')}")
-        return 1
     return 0
 
 

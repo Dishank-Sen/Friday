@@ -21,21 +21,17 @@ from friday.harness.nodes import Node, default_nodes
 from friday.harness.nodes.build_context import make_build_context
 from friday.harness.nodes.decide import make_decide
 from friday.harness.nodes.executor import ExecutorDeps, make_executor_node
+from friday.harness.nodes.finish import make_finish
 from friday.harness.nodes.guard import make_guard
 from friday.harness.nodes.observe import make_observe
+from friday.harness.nodes.settle import make_settle
+from friday.harness.nodes.verify import make_verify
 from friday.llm.base import VisionLLM
 
 # Nodes that must be real (not the default stub) for a live run. When a node
 # becomes implemented, add its name here: a one-line change. Keeping this as the
 # single source lets ``build_production_graph`` fail closed on any unwired slot.
 REQUIRED_REAL: frozenset[str] = frozenset({"observe", "build_context", "decide", "guard"})
-
-# Pairs that must be real *together*: if the first member is real, the second
-# must be real too, else the produced graph is unsound. Adding a pair is one
-# line. ``allow_stubs`` bypasses both checks.
-REQUIRED_TOGETHER: frozenset[tuple[str, str]] = frozenset(
-    {("executor", "settle"), ("executor", "verify")}
-)
 
 
 class ConfigurationError(ValueError):
@@ -90,11 +86,14 @@ def build_production_graph(
     if deps.client is not None and deps.trace_writer is not None:
         focus = deps.focus_table or (lambda _class: "other")
         real["observe"] = make_observe(deps.client, deps.trace_writer, focus)
+        real["settle"] = make_settle(deps.client, deps.trace_writer, focus)
     if deps.llm is not None:
         real["decide"] = make_decide(llm=deps.llm)
     if deps.policy is not None:
         real["build_context"] = make_build_context(policy=deps.policy, limits=deps.limits)
         real["guard"] = make_guard(policy=deps.policy)
+    real["verify"] = make_verify()
+    real["finish"] = make_finish()
     if deps.executor is not None:
         real["executor"] = make_executor_node(deps.executor)
     if deps.settle is not None:
@@ -110,13 +109,5 @@ def build_production_graph(
                 raise ConfigurationError(
                     f"{name} is still the default stub; provide the dependencies "
                     f"required to make it real before running live"
-                )
-        for first, second in REQUIRED_TOGETHER:
-            first_real = getattr(nodes, first) is not getattr(base, first)
-            second_is_stub = getattr(nodes, second) is getattr(base, second)
-            if first_real and second_is_stub:
-                raise ConfigurationError(
-                    f"a real {first} requires a real {second}; a {first} with a "
-                    f"stub {second} would act on stale state"
                 )
     return build_graph(nodes, checkpointer=checkpointer)

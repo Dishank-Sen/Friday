@@ -3,12 +3,13 @@
 ## Purpose
 
 This package defines the agent loop topology. `observe`, `build_context`,
-`decide` (via injected, LLM-calling factories), `guard`, and `executor` are
-implemented; the remaining default nodes (settle, verify, finish) are no-I/O
-stubs. The harness itself imports no desktop client or network service at
-module load; I/O is injected. Run a task through `decide` with
-`python -m friday run "<goal>"` against a live sandbox (see
-`src/friday/__main__.py`).
+`decide` (via injected, LLM-calling factories), `guard`, `executor`, `settle`,
+`verify`, and `finish` are implemented; no default nodes remain stubs. The
+harness itself imports no desktop client or network service at module load; I/O
+is injected. Run a task with `python -m friday run "<goal>"` against a live
+sandbox (see `src/friday/__main__.py`): the goal goes through observe →
+build_context → decide → guard, and an allowed action is executed and
+reconciled via executor → settle → verify before the loop continues.
 
 ```mermaid
 flowchart LR
@@ -41,6 +42,9 @@ docs cannot disagree:
 | decide | prompt, screenshot_path | decision, hint, pending_action, retries |
 | guard | focused_app, history, max_steps, pending_action, retries, screen_size, started_at, status, step | guard_verdict, hint |
 | executor | guard_verdict, pending_action | last_result |
+| settle | screenshot_path | focused_app, prev_screenshot_path, screen_size, screenshot_path, windows |
+| verify | decision, history, last_result, pending_action, step, stuck_count | final_report, history, status, step, stuck_count |
+| finish | decision, final_report, guard_verdict, hint, status | final_report, status |
 <!-- GEN:node-contract -->
 ```
 
@@ -63,16 +67,18 @@ Approval and user-control status for a step are not state fields; they are carri
 
 ## Nodes
 
-| Node | Reads | Future writes | Next |
+| Node | Reads | Writes | Next |
 | --- | --- | --- | --- |
 | observe | nothing | screenshot_path, screen_size, windows, focused_app; on fatal capture failure status, final_report | route_after_observe |
 | decide | prompt, screenshot_path | decision, pending_action, retries, hint | route_after_decide |
 | guard | pending_action, screen_size, budgets, history, stuck_count, focused_app, status | guard_verdict, hint, stuck_count | route_after_guard |
 | executor | pending_action | last_result | settle |
-| settle | screenshot_path, last_result | prev_screenshot_path, screenshot_path, screen_size, windows, focused_app | verify |
-| verify | screenshot paths, last_result | hint, stuck_count | build_context |
+| settle | screenshot_path | prev_screenshot_path, screenshot_path, screen_size, windows, focused_app | verify |
+| verify | screenshot paths, last_result, decision, pending_action, history, step, stuck_count | step, history, stuck_count; on stuck final_report, status | build_context |
 | build_context | goal, screen_size, windows, focused_app, history, last_result, hint, step, max_steps, retries, status, pending_action, guard_verdict | prompt, hint | decide |
-| finish | all terminal context | status, final_report | END |
+| finish | status, final_report, decision, guard_verdict, hint | status, final_report | END |
+
+`step`, `history`, and `stuck_count` are written by `verify`, the reconciliation step, on every pass through the loop. That is what lets the guard's step budget and repeat check actually fire, so a live run terminates instead of recursing. `finish` resolves the terminal `status`/`final_report` from the decision, verdict, or a prior failure; `final_report`/`status` written earlier (observe failure, verify stuck) are preserved.
 
 Expected execution failures belong in `last_result` with `ok: false`; they do not raise. Only routing reads `decision` or `guard_verdict`: `None` logs a warning and goes to finish, while an unknown value raises `ValueError`.
 
@@ -112,22 +118,31 @@ graph = build_graph(replace(default_nodes(), decide=my_decide))
 
 `friday.harness.compose.build_production_graph(deps)` is the single assembly
 point for a live graph. It builds the real `observe`, `build_context`, `decide`,
-`guard`, and `executor` nodes from their factories and `dataclasses.replace`s
-them onto `default_nodes()`, leaving the remaining slots as stubs. The
+`guard`, `executor`, `settle`, `verify`, and `finish` nodes from their factories
+and `dataclasses.replace`s them onto `default_nodes()`. `settle` is built real
+whenever `client`/`trace_writer` are present (the same gate as `observe`), and
+`verify`/`finish` are always built real; `executor` is built real only when an
+`ExecutorDeps` is supplied. Because `settle`/`verify` are real in exactly the
+situations `observe` is, a live run can never act on stale state without
+reconciling it: the executor is hardwired to a real `settle`+`verify`. The
 `REQUIRED_REAL` frozenset names the nodes that must not be stubs for a live run;
 when one is still a stub the builder raises `ConfigurationError` naming it,
-rather than silently running unwired. To promote a node to real, add its
-factories to `build_production_graph` and its name to `REQUIRED_REAL`.
-
-The `REQUIRED_TOGETHER` table adds one-line rules that two nodes must be real
-together: today a real `executor` requires real `settle` and `verify`, so a
-live run cannot act on stale state. `allow_stubs` bypasses both checks.
+rather than silently running unwired. `allow_stubs` bypasses the check.
 
 All live CLI paths — `friday run` and `friday exec-once` today — assemble the
 graph through `build_production_graph` rather than composing nodes inline.
 Checkpointing is passed through the builder's `checkpointer` argument.
 `friday exec-once '<action json>'` runs the real guard and, if it allows, the
 real executor against a running sandbox — no model call, no graph.
+
+**Execution in `friday run`.** The runner supplies an `ExecutorDeps` backed by
+`RemoteExecutor`, so an allowed action is executed against the live desktop:
+executor → settle (fresh post-action observation, rotating paths) → verify
+(advance `step`, append `history`, track `stuck_count`) → build_context → decide.
+This is what makes a live loop terminate: `verify` advances `step`, and when the
+guard's step or time budget trips it returns `stop`, which routes to `finish`.
+The runner also seeds `retries` from the model settings (the guard rejects when
+`retries <= 0`, so a fresh task needs headroom for its first action).
 
 **Time budget.** `started_at` is stamped by the runner (the CLI sets it from the
 injected wall clock `time.time()` before the first node runs, so a checkpointed
@@ -139,13 +154,14 @@ run in another process still has an interpretable budget). The guard treats
 
 ## Known gaps
 
-`started_at` is stamped by the runner; `step`, `history`, and `stuck_count`
-have **no writers** other than `initial_state` (`step`/`history`/`stuck_count`
-start at neutral values and nothing increments them). They are read — `guard`
-uses `step` for its step budget and `history` for repeat suppression — but never
-updated. The proposed owner is `verify` (it is the reconciliation step); until
-then the guard's step budget and repeat check cannot fire. Fixing these writers
-is a deliberate future task, not part of the executor work.
+`step`, `history`, and `stuck_count` are written by `verify` on every pass
+through the loop, so the guard's step budget and repeat suppression now fire and
+a live run terminates. `started_at` is stamped by the runner. Remaining gaps:
+`finish` resolves the terminal status but does not yet run host-side
+`release_all` (held input on an abnormal end is documented in `executor_node.md`),
+and screenshot diffing in `verify` is not yet implemented — `verify` today judges
+success from `last_result`. A `max_steps` run that never reaches `done` still
+terminates via the guard's budget and reports `stopped`.
 
 ## Not in this skeleton
 

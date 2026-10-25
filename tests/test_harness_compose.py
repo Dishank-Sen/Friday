@@ -170,75 +170,6 @@ def test_unwired_guard_in_composed_graph_fails_closed() -> None:
     assert calls[-1] == "finish"
 
 
-# --- REQUIRED_TOGETHER: a real executor needs real settle + verify -----------
-
-
-def _exec_deps():
-    from friday.harness.nodes.executor import ExecutorDeps
-    from friday.harness.steps import ExecutorSettings
-
-    class _Ex:
-        def execute(self, action):  # noqa: ANN001, ANN202
-            from friday.actions.models import ActionResult
-
-            return ActionResult(ok=True)
-
-    class _Tr:
-        def write_image(self, step_index: int, name: str, png: bytes) -> str:
-            return "/tmp/x.png"
-
-    return ExecutorDeps(executor=_Ex(), trace_writer=_Tr(), settings=ExecutorSettings())
-
-
-def _real_settle():  # noqa: ANN202
-    def settle(state):  # noqa: ANN001, ANN202
-        return {}
-
-    return settle
-
-
-def _real_verify():  # noqa: ANN202
-    def verify(state):  # noqa: ANN001, ANN202
-        return {}
-
-    return verify
-
-
-def test_real_executor_with_stub_settle_raises_configuration_error() -> None:
-    deps = _deps(executor=_exec_deps())
-
-    with pytest.raises(ConfigurationError) as exc_info:
-        build_production_graph(deps)
-
-    # both settle and verify are stubs; either may be reported first
-    assert "requires a real settle" in str(exc_info.value) or "requires a real verify" in str(
-        exc_info.value
-    )
-
-
-def test_real_executor_with_stub_verify_raises_configuration_error() -> None:
-    deps = _deps(executor=_exec_deps(), settle=_real_settle())
-
-    with pytest.raises(ConfigurationError, match="verify"):
-        build_production_graph(deps)
-
-
-def test_allow_stubs_builds_single_real_executor_with_stub_settle() -> None:
-    deps = _deps(executor=_exec_deps())
-
-    graph = build_production_graph(deps, allow_stubs=True)
-
-    assert graph is not None
-
-
-def test_executor_settle_verify_all_real_builds() -> None:
-    deps = _deps(executor=_exec_deps(), settle=_real_settle(), verify=_real_verify())
-
-    graph = build_production_graph(deps)
-
-    assert graph is not None
-
-
 # --- composed graph with a real executor runs the guarded path ----------------
 
 def test_guard_allow_reaches_executor_and_writes_last_result() -> None:
@@ -365,3 +296,86 @@ def test_guard_reject_never_touches_executor() -> None:
     build_graph(nodes).invoke(initial_state("goal", 5))
 
     assert "executor" not in calls
+
+
+# --- full loop through the production graph terminates -----------------------
+
+
+def test_production_graph_full_loop_executes_settles_verifies_terminal_state() -> None:
+    """The composed production graph runs executor -> settle -> verify and terminates.
+
+    Uses the real factories (executor via ExecutorDeps over a fake Executor,
+    real settle, real verify, real finish) so the loop actually advances ``step``
+    and the run reports a terminal status instead of recursing. This is the
+    closed-loop proof that wiring the executor makes a live run end.
+    """
+    from friday.harness.nodes.executor import ExecutorDeps
+    from friday.harness.steps import ExecutorSettings
+
+    executed: list[str] = []
+
+    class _Ex:
+        def execute(self, action):  # noqa: ANN001, ANN202
+            executed.append(str(action.action))
+            from friday.actions.models import ActionResult
+
+            return ActionResult(ok=True)
+
+    class _Tr:
+        def __init__(self) -> None:
+            import tempfile
+
+            self._f = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            self._f.write(b"\x89PNG\r\n\x1a\n")
+            self._f.close()
+            self._path = self._f.name
+
+        def write(self, observation, error=None):
+            return self._path
+
+        def write_image(self, step_index: int, name: str, png: bytes) -> str:
+            return f"{self._path}#{name}"
+
+    class _Policy:
+        def policy(self, state):  # noqa: ANN001
+            from friday.harness.capabilities import ControlPolicy
+
+            return ControlPolicy(approval=True, user_control=False)
+
+    class _ActionThenDone:
+        """A fake LLM whose text response is a valid decision payload."""
+
+        def __init__(self) -> None:
+            self.count = 0
+
+        def invoke(self, prompt, images):  # noqa: ANN001
+            from friday.llm.base import LLMResponse
+
+            self.count += 1
+            if self.count == 1:
+                return LLMResponse(
+                    text='{"decision": "action", "pending_action": '
+                    '{"action": "left_click", "x": 1, "y": 2}}'
+                )
+            return LLMResponse(text='{"decision": "done"}')
+
+    deps = ProductionDeps(
+        client=_FakeClient(),
+        trace_writer=_Tr(),
+        focus_table=lambda _c: "browser",
+        llm=_ActionThenDone(),
+        policy=_Policy(),
+        executor=ExecutorDeps(executor=_Ex(), trace_writer=_Tr(), settings=ExecutorSettings()),
+    )
+    graph = build_production_graph(deps)
+    state = initial_state("open a web page", 5)
+    state["retries"] = 2
+
+    result = graph.invoke(state, config={"recursion_limit": 50})
+
+    assert executed == ["left_click"]
+    # the loop advanced step (0 -> 1) and wrote a history record passed through verify
+    assert result["step"] == 1
+    assert result["history"][-1]["outcome"] == "succeeded"
+    # finish resolved the terminal status to done
+    assert result["status"] == "done"

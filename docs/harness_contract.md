@@ -5,3 +5,6 @@
 | decide | prompt, screenshot_path | decision, hint, pending_action, retries |
 | guard | focused_app, history, max_steps, pending_action, retries, screen_size, started_at, status, step | guard_verdict, hint |
 | executor | guard_verdict, pending_action | last_result |
+| settle | screenshot_path | focused_app, prev_screenshot_path, screen_size, screenshot_path, windows |
+| verify | decision, history, last_result, pending_action, step, stuck_count | final_report, history, status, step, stuck_count |
+| finish | decision, final_report, guard_verdict, hint, status | final_report, status |

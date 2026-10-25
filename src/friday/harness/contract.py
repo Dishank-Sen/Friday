@@ -74,20 +74,54 @@ EXECUTOR = NodeContract(
     writes=frozenset({"last_result"}),
 )
 
-# Implemented nodes, in graph order. Add settle/verify/finish as they land.
+SETTLE = NodeContract(
+    reads=frozenset({"screenshot_path"}),
+    writes=frozenset(
+        {"prev_screenshot_path", "screenshot_path", "screen_size", "windows", "focused_app"}
+    ),
+)
+
+VERIFY = NodeContract(
+    reads=frozenset(
+        {"decision", "pending_action", "last_result", "history", "step", "stuck_count"}
+    ),
+    writes=frozenset(
+        {"step", "history", "stuck_count", "final_report", "status"}
+    ),
+)
+
+FINISH = NodeContract(
+    reads=frozenset({"status", "final_report", "decision", "guard_verdict", "hint"}),
+    writes=frozenset({"status", "final_report"}),
+)
+
+# Implemented nodes, in graph order.
 NODES: dict[str, NodeContract] = {
     "observe": OBSERVE,
     "build_context": BUILD_CONTEXT,
     "decide": DECIDE,
     "guard": GUARD,
     "executor": EXECUTOR,
+    "settle": SETTLE,
+    "verify": VERIFY,
+    "finish": FINISH,
 }
 
 
 def _as_table_markdown() -> str:
     """Render the read/write contract as the markdown table used by docs."""
     lines = ["| Node | Reads | Writes |", "| --- | --- | --- |"]
-    for name in ("observe", "build_context", "decide", "guard", "executor"):
+    order = (
+        "observe",
+        "build_context",
+        "decide",
+        "guard",
+        "executor",
+        "settle",
+        "verify",
+        "finish",
+    )
+    for name in order:
         contract = NODES[name]
         reads = ", ".join(sorted(contract.reads)) or "—"
         writes = ", ".join(sorted(contract.writes)) or "—"
