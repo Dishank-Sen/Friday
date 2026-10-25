@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from friday import __main__
 
 
@@ -13,7 +15,7 @@ class _Args:
 
 
 class _Graph:
-    def invoke(self, state):
+    def invoke(self, state, config=None):
         return {"decision": "done"}
 
 
@@ -90,7 +92,7 @@ def test_run_task_stamps_started_at_before_the_graph_runs() -> None:
 
     class _G:
         @staticmethod
-        def invoke(state):  # noqa: ANN001
+        def invoke(state, config=None):  # noqa: ANN001
             invoked_with["started_at"] = state["started_at"]
             return {"decision": "done"}
 
@@ -109,3 +111,26 @@ def test_run_task_stamps_started_at_before_the_graph_runs() -> None:
     # started_at (0.0 from initial_state) must be replaced by the runner's wall
     # clock stamp before the first node runs
     assert invoked_with["started_at"] == 1234.0
+
+
+def test_run_task_prints_loop_diagnostic_on_recursion() -> None:
+    captured: list[str] = []
+
+    class _RaisingGraph:
+        def invoke(self, state, config=None):  # noqa: ANN001
+            raise RuntimeError("recursion limit reached")
+
+    def fake_build(deps, *, checkpointer=None, allow_stubs=False):
+        return _RaisingGraph()
+
+    with patch("friday.__main__.build_production_graph", side_effect=fake_build), patch(
+        "friday.__main__.DesktopClient"
+    ), patch("friday.__main__.create_llm"), patch(
+        "friday.__main__._load_sandbox", return_value=_Sandbox()
+    ), patch("friday.__main__.print", side_effect=captured.append):
+        with pytest.raises(RuntimeError):
+            __main__._run_task(_Args())
+
+    joined = " ".join(captured)
+    assert "[loop]" in joined
+    assert "stub executor" in joined

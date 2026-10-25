@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -190,14 +191,16 @@ def main() -> int:
 
 
 def _run_task(args: argparse.Namespace) -> int:
-    """Run the harness through the production graph up to decide, print decide output.
+    """Run the harness through the production graph, tracing each step.
 
     A live sandbox is required (``python -m friday up`` first). The graph
     ``build_production_graph`` assembles the real observe, build_context, decide,
-    and guard nodes; the run goes observe -> build_context -> decide and prints
-    the model's decision. Only the decision is printed; nothing executes.
+    and guard nodes, plus a real executor only when an executor dependency is
+    given (the default keeps the stub). Each node entry is printed by a
+    ``_StepTracer`` so the loop and its edge are visible in the terminal.
     """
     sandbox = _load_sandbox()
+    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     settings = LLMSettings.from_env()
     llm = create_llm(settings)
     max_steps = max(1, settings.max_retries + 10)
@@ -213,7 +216,17 @@ def _run_task(args: argparse.Namespace) -> int:
             policy=_CliPolicy(),
         )
         graph = build_production_graph(deps)
-        result = graph.invoke(state)
+        try:
+            result = graph.invoke(state, config={"recursion_limit": max_steps})
+        except Exception as error:
+            print(
+                "[loop] the graph did not terminate within "
+                f"{max_steps} steps. Likely cause: guard 'allow' routes into the "
+                "executor node, but `friday run` wires no executor dependency, so "
+                "the stub executor writes nothing and step is never advanced, "
+                "looping execute->settle->verify->build_context->decide."
+            )
+            raise error
 
     print("=== decide output ===")
     for key in ("decision", "pending_action", "retries"):
