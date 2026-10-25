@@ -67,16 +67,28 @@ def _base_state(**overrides) -> dict:
 
 
 def _nodes() -> dict[str, object]:
+    from friday.harness.nodes.decide import make_decide
+
     return {
         "build_context": make_build_context(),
+        "decide": make_decide(llm=_FakeLLM()),
         "guard": make_guard(),
         "observe": make_observe(_FakeClient(), _FakeTrace(), focused_app_for),
     }
 
 
+class _FakeLLM:
+    def invoke(self, prompt, images):  # noqa: ANN001
+        from friday.llm.base import LLMResponse
+
+        return LLMResponse(text='{"decision": "done"}')
+
+
 def _case_state(name: str) -> dict:
     if name == "guard":
         return _base_state(pending_action={"action": "shortcut", "name": "copy"})
+    if name == "decide":
+        return _base_state(prompt="a rendered prompt", screenshot_path=None)
     return _base_state()
 
 
@@ -84,7 +96,7 @@ def _case_state(name: str) -> dict:
 
 
 def test_contract_table_lists_every_implemented_node() -> None:
-    assert set(NODES) >= {"observe", "build_context", "guard"}
+    assert set(NODES) >= {"observe", "build_context", "decide", "guard"}
 
 
 # --- write-contract: a node returns only its documented writes ---------------

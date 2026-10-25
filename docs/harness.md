@@ -2,7 +2,12 @@
 
 ## Purpose
 
-This package defines only the future agent loop topology. Every default node is a no-I/O stub: it logs its name and returns `{}`. The skeleton does not import or call an LLM, executor, desktop client, screenshot facility, filesystem, or network service.
+This package defines the agent loop topology. `observe`, `build_context`,
+`decide` (via injected, LLM-calling factories) and `guard` are implemented; the
+remaining default nodes (executor, settle, verify, finish) are no-I/O stubs. The
+harness itself imports no desktop client or network service at module load; I/O
+is injected. Run a task through `decide` with `python -m friday run "<goal>"`
+against a live sandbox (see `src/friday/__main__.py`).
 
 ```mermaid
 flowchart LR
@@ -32,6 +37,7 @@ docs cannot disagree:
 | --- | --- | --- |
 | observe | — | final_report, focused_app, screen_size, screenshot_path, status, windows |
 | build_context | focused_app, goal, guard_verdict, hint, history, last_result, max_steps, pending_action, retries, screen_size, screenshot_path, step, windows | hint, prompt |
+| decide | prompt, screenshot_path | decision, hint, pending_action, retries |
 | guard | focused_app, history, max_steps, pending_action, retries, screen_size, status, step | guard_verdict, hint |
 <!-- GEN:node-contract -->
 ```

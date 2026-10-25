@@ -353,7 +353,7 @@ could not succeed. Rework:
 
 ### Results
 
-Full suite `504 passed, 2 skipped`; `ruff check .` clean; generated harness,
+Full suite `513 passed, 2 skipped`; `ruff check .` clean; generated harness,
 operations, and keybinding docs all match their generators. Nothing outside the
 listed scope (no new nodes, state fields, or round/features) was added.
 

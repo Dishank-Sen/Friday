@@ -9,6 +9,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from friday.actions.focus import focused_app_for
 from friday.actions.models import parse_action
 from friday.config import FridayConfig
 from friday.dashboard import Dashboard, DashboardLauncher
@@ -16,6 +17,7 @@ from friday.desktop.client import DesktopClient
 from friday.desktop.errors import DesktopError
 from friday.executor.remote import RemoteExecutor
 from friday.graph.locate import LocateRunner
+from friday.harness.trace import ObservationTraceWriter
 from friday.llm import LLMError, create_llm
 from friday.llm.config import LLMSettings
 from friday.operations.registry import parse_operation
@@ -50,6 +52,11 @@ def _parser() -> argparse.ArgumentParser:
     source.add_argument("--image", type=Path)
     source.add_argument("--live", action="store_true")
     locate.add_argument("--annotate", type=Path)
+    run_cmd = subparsers.add_parser(
+        "run", help="observe, build context, and ask the model for the next decision"
+    )
+    run_cmd.add_argument("goal", help="task/prompt to decide on")
+    run_cmd.add_argument("--trace-dir", type=Path, default=Path(".friday-traces"))
     return parser
 
 
@@ -131,6 +138,8 @@ def main() -> int:
     try:
         if args.command == "locate":
             return _locate(args)
+        if args.command == "run":
+            return _run_task(args)
         sandbox = _load_sandbox()
         if args.command == "status":
             sandbox.wait_until_ready()
@@ -159,6 +168,48 @@ def main() -> int:
     ) as error:
         print(f"Friday: {error}")
         return 1
+
+
+def _run_task(args: argparse.Namespace) -> int:
+    """Run the harness up to decide: observe -> build_context -> decide, print decide output.
+
+    A live sandbox is required (``python -m friday up`` first). ``observe``
+    captures the desktop, ``build_context`` renders the goal into the prompt and
+    selects capabilities, and ``decide`` asks the model for the next decision.
+    Only the decision is printed; nothing executes.
+    """
+    from friday.harness.nodes.build_context import make_build_context
+    from friday.harness.nodes.decide import make_decide
+    from friday.harness.nodes.observe import make_observe
+    from friday.harness.state import initial_state
+
+    sandbox = _load_sandbox()
+    settings = LLMSettings.from_env()
+    llm = create_llm(settings)
+    state = initial_state(args.goal, settings.max_retries + 10)
+
+    with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as desktop:
+        observe = make_observe(desktop, ObservationTraceWriter(args.trace_dir), focused_app_for)
+        update = observe(state)
+        state.update(update)
+        if state.get("status") == "failed":
+            print(f"observation failed: {state.get('final_report')}")
+            return 1
+
+        node = make_build_context()
+        state.update(node(state))
+        if state.get("prompt") is None:
+            print("context construction failed; nothing to decide on")
+            return 1
+
+        decide = make_decide(llm=llm)
+        decision = decide(state)
+
+    print("=== decide output ===")
+    for key in ("decision", "pending_action", "retries"):
+        if key in decision:
+            print(f"{key}: {json.dumps(decision[key], sort_keys=True)}")
+    return 0
 
 
 def _locate(args: argparse.Namespace) -> int:

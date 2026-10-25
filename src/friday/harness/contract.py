@@ -63,10 +63,16 @@ OBSERVE = NodeContract(
     ),
 )
 
-# Implemented nodes, in graph order. Add decide/settle/verify/finish as they land.
+DECIDE = NodeContract(
+    reads=frozenset({"prompt", "screenshot_path"}),
+    writes=frozenset({"decision", "pending_action", "retries", "hint"}),
+)
+
+# Implemented nodes, in graph order. Add settle/verify/finish as they land.
 NODES: dict[str, NodeContract] = {
     "observe": OBSERVE,
     "build_context": BUILD_CONTEXT,
+    "decide": DECIDE,
     "guard": GUARD,
 }
 
@@ -74,7 +80,7 @@ NODES: dict[str, NodeContract] = {
 def _as_table_markdown() -> str:
     """Render the read/write contract as the markdown table used by docs."""
     lines = ["| Node | Reads | Writes |", "| --- | --- | --- |"]
-    for name in ("observe", "build_context", "guard"):
+    for name in ("observe", "build_context", "decide", "guard"):
         contract = NODES[name]
         reads = ", ".join(sorted(contract.reads)) or "—"
         writes = ", ".join(sorted(contract.writes)) or "—"
