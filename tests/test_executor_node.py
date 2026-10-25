@@ -139,6 +139,18 @@ def test_allowed_action_runs_and_lands_in_last_result() -> None:
     assert result["last_result"]["operation"] == "left_click"
 
 
+def test_node_passes_shortcut_action_through_unchanged() -> None:
+    executor = _FakeExecutor()
+    node = _node(executor=executor)
+    pending = {"action": "shortcut", "name": "copy", "repeat": 1}
+
+    result = node(_state(pending))
+
+    assert len(executor.calls) == 1
+    assert executor.calls[0].model_dump() == pending
+    assert result["last_result"]["ok"] is True
+
+
 def test_node_writes_only_last_result() -> None:
     executor = _FakeExecutor()
     node = _node(executor=executor)
