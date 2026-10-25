@@ -17,6 +17,9 @@ from friday.desktop.client import DesktopClient
 from friday.desktop.errors import DesktopError
 from friday.executor.remote import RemoteExecutor
 from friday.graph.locate import LocateRunner
+from friday.harness.capabilities import ControlPolicy
+from friday.harness.compose import ProductionDeps, build_production_graph
+from friday.harness.state import initial_state
 from friday.harness.trace import ObservationTraceWriter
 from friday.llm import LLMError, create_llm
 from friday.llm.config import LLMSettings
@@ -175,45 +178,45 @@ def main() -> int:
 
 
 def _run_task(args: argparse.Namespace) -> int:
-    """Run the harness up to decide: observe -> build_context -> decide, print decide output.
+    """Run the harness through the production graph up to decide, print decide output.
 
-    A live sandbox is required (``python -m friday up`` first). ``observe``
-    captures the desktop, ``build_context`` renders the goal into the prompt and
-    selects capabilities, and ``decide`` asks the model for the next decision.
-    Only the decision is printed; nothing executes.
+    A live sandbox is required (``python -m friday up`` first). The graph
+    ``build_production_graph`` assembles the real observe, build_context, decide,
+    and guard nodes; the run goes observe -> build_context -> decide and prints
+    the model's decision. Only the decision is printed; nothing executes.
     """
-    from friday.harness.nodes.build_context import make_build_context
-    from friday.harness.nodes.decide import make_decide
-    from friday.harness.nodes.observe import make_observe
-    from friday.harness.state import initial_state
-
     sandbox = _load_sandbox()
     settings = LLMSettings.from_env()
     llm = create_llm(settings)
-    state = initial_state(args.goal, settings.max_retries + 10)
+    max_steps = max(1, settings.max_retries + 10)
 
+    state = initial_state(args.goal, max_steps)
     with DesktopClient(sandbox, timeout=sandbox.config.request_timeout) as desktop:
-        observe = make_observe(desktop, ObservationTraceWriter(args.trace_dir), focused_app_for)
-        update = observe(state)
-        state.update(update)
-        if state.get("status") == "failed":
-            print(f"observation failed: {state.get('final_report')}")
-            return 1
-
-        node = make_build_context()
-        state.update(node(state))
-        if state.get("prompt") is None:
-            print("context construction failed; nothing to decide on")
-            return 1
-
-        decide = make_decide(llm=llm)
-        decision = decide(state)
+        deps = ProductionDeps(
+            client=desktop,
+            trace_writer=ObservationTraceWriter(args.trace_dir),
+            focus_table=focused_app_for,
+            llm=llm,
+            policy=_CliPolicy(),
+        )
+        graph = build_production_graph(deps)
+        result = graph.invoke(state)
 
     print("=== decide output ===")
     for key in ("decision", "pending_action", "retries"):
-        if key in decision:
-            print(f"{key}: {json.dumps(decision[key], sort_keys=True)}")
+        if result.get(key) is not None:
+            print(f"{key}: {json.dumps(result[key], sort_keys=True)}")
+    if result.get("status") == "failed":
+        print(f"observation failed: {result.get('final_report')}")
+        return 1
     return 0
+
+
+class _CliPolicy:
+    """A permissive policy so a plain `run` can exercise the decide path."""
+
+    def policy(self, state):  # noqa: ANN001, ANN201
+        return ControlPolicy(approval=True, user_control=False)
 
 
 def _locate(args: argparse.Namespace) -> int:
