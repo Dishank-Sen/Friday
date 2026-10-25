@@ -107,6 +107,24 @@ class TypeAction(_Action):
     text: str = Field(max_length=MAX_TEXT_LENGTH)
 
 
+# A secret is referenced by NAME ONLY. The value is never part of the action,
+# its serialized form, or any prompt/state — it is resolved from the vault and
+# typed at execution time (see the executor secrets layer).
+MAX_SECRET_NAME_LENGTH = 128
+
+
+class TypeSecretAction(_Action):
+    action: Literal["type_secret"]
+    name: str = Field(min_length=1, max_length=MAX_SECRET_NAME_LENGTH)
+
+    @field_validator("name")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("secret name must not be blank")
+        return value
+
+
 class KeyAction(_Action):
     action: Literal["key"]
     key: str
@@ -173,6 +191,7 @@ Action = Annotated[
         | LeftMouseUpAction
         | ScrollAction
         | TypeAction
+        | TypeSecretAction
         | KeyAction
         | HoldKeyAction
         | ShortcutAction

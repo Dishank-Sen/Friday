@@ -99,6 +99,23 @@ def test_client_sends_auth_and_returns_desktop_data() -> None:
     assert all(request.headers["authorization"] == "Bearer secret" for request in seen)
 
 
+def test_client_type_secret_sends_value_only_to_the_secret_endpoint() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/type_secret":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404)
+
+    with DesktopClient(FakeSandbox(), transport=httpx.MockTransport(handler)) as client:
+        client.type_secret("db_password", "hunter2")
+
+    assert len(seen) == 1
+    assert seen[0].url.path == "/type_secret"
+    assert seen[0].content == b'{"name":"db_password","value":"hunter2"}'
+
+
 def test_client_raises_typed_error_for_http_failure() -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(401, text="bad token"))
 

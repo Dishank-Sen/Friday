@@ -34,7 +34,9 @@ ERROR_TYPES = frozenset(
 
 # Actions that carry user-supplied input. Their results are never surfaced in
 # ``detail`` so typed text, clipboard content, and file contents cannot leak.
-_SENSITIVE_OPERATIONS: frozenset[str] = frozenset({"type", "key", "hold_key"})
+# ``type_secret`` is included even though its value is never a field: the
+# secret result must never expose a value or vault detail.
+_SENSITIVE_OPERATIONS: frozenset[str] = frozenset({"type", "key", "hold_key", "type_secret"})
 
 _TIMEOUT_MESSAGE = "outcome unknown: the action may have run; check the screen before repeating"
 _CONNECTION_MESSAGE = "outcome unknown: the control server could not be reached"

@@ -166,6 +166,16 @@ class X11Backend:
                 finally:
                     self._held_buttons.discard(button)
 
+    def run_secret_typed(self, argv: list[str], stdin: str) -> None:
+        """Type a secret value by streaming it to the process stdin.
+
+        ``argv`` is the fixed ``xdotool type --file -`` command; the value is
+        never an argv element. The stdin is written once and closed; nothing
+        here logs the value or its length.
+        """
+        with self._lock:
+            self._runner.start_with_stdin(argv, stdin).wait()
+
     def _execute_locked(self, action: Action) -> ActionResult:
         if isinstance(action, ScreenshotAction):
             return ActionResult(ok=True, image_png=self.screenshot())

@@ -91,6 +91,16 @@ class DesktopClient:
         except ValueError as error:
             raise DesktopRequestError(502, "invalid operation response") from error
 
+    # The secret value is sent only to the dedicated /type_secret endpoint and
+    # is never logged, never echoed, and never enters any other path. ``value``
+    # here is the transient, already-unwrapped secret string.
+    def type_secret(self, name: str, value: str) -> dict[str, object]:
+        response = self._request("POST", "/type_secret", json={"name": name, "value": value})
+        try:
+            return response.json()
+        except ValueError as error:
+            raise DesktopRequestError(502, "invalid type_secret response") from error
+
     def browser_state(self) -> BrowserState:
         return self._model("GET", "/browser/state", BrowserState)
 

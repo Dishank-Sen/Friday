@@ -44,3 +44,26 @@ def test_action_result_round_trips_png_json() -> None:
 
 def test_scroll_accepts_complete_pointer_position() -> None:
     assert ScrollAction(action="scroll", amount=-1, x=2, y=3).x == 2
+
+
+# --- type_secret: name-only secret typing --------------------------------
+
+
+def test_type_secret_accepts_a_valid_name() -> None:
+    action = parse_action('{"action":"type_secret","name":"db_password"}')
+
+    assert action.action == "type_secret"
+    assert action.name == "db_password"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"action": "type_secret", "name": ""},
+        {"action": "type_secret", "name": "  "},
+        {"action": "type_secret", "name": "x" * 129},
+    ],
+)
+def test_type_secret_rejects_blank_or_oversized_names(payload: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        ACTION_ADAPTER.validate_python(payload)

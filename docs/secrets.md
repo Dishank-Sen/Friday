@@ -79,3 +79,42 @@ typing function (Layer 2) may call it.
 
 See `docs/harness.md` for the surrounding loop; this module is consumed by the
 `ask_user` node, the CLI runner, and the executor typing path in later layers.
+
+## Layer 2 — typing a secret (name-only, stdin, fresh-focus gate)
+
+`type_secret` is an **action** (`TypeSecretAction` in `actions/models.py`) whose
+only field is the secret *name*. The value never enters the action, state,
+prompts, or any `last_result` detail. On execution:
+
+1. `guard` parses it as a normal action (no approval requirement — it is the
+   executor's focus gate and the vault that decide whether anything is typed).
+2. `RemoteExecutor` intercepts it, resolves the name against an injected
+   `SecretVault`, and calls `DesktopClient.type_secret(name, value)` only when
+   the name is present. The value is unwrapped here — the one deliberate typing
+   gate — and passed only to the dedicated endpoint.
+3. `DesktopClient.type_secret` POSTs `{name, value}` to `/type_secret` only.
+4. The server re-reads the focused window **fresh at execution time** and
+   refuses to type unless the focused app is in a configured allowlist
+   (default: `browser` only). On rejection nothing is typed and the 422 body
+   carries only a generic message.
+5. The value is streamed to `xdotool type --file -` as **stdin**, never as an
+   argv element, so it is invisible even transiently in `ps`. It is written
+   once, closed, and never logged.
+
+**Error bodies never echo the value.** The server's global request-validation
+handler strips `input`/`value`/`ctx` from every 422 detail (only `type`, `loc`,
+`msg` survive), so a failed secret request — bad name, missing/unknown field,
+focus rejection, or oversized value — returns a body that contains neither the
+value nor the offending field. The `/operation` route similarly scrubs its
+422 detail.
+
+**The value still transits the HTTP body in Layer 2.** This is why the 422
+scrub is load-bearing: the client holds the vault secret and must deliver it to
+the typing backend over the control API. It is never persisted, never logged
+(the uvicorn access log emits only the request line), and never echoed on
+error. Keeping it out of the on-wire transport itself is out of scope for this
+layer but is the known limitation noted here.
+
+**Sensitivity in the harness.** `run_steps` treats `type_secret` like `type`/
+`key`/`hold_key`: its result `detail` is never surfaced, so even a hypothetical
+executor detail cannot leak the value into `last_result` or a future prompt.

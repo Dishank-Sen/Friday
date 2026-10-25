@@ -3,27 +3,35 @@
 from __future__ import annotations
 
 import hmac
+import json
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
-from friday.actions.models import ActionResult, parse_action
+from friday.actions.models import ActionResult, TypeSecretAction, parse_action
 from friday.browser.models import BrowserState, ProbeStatus, WaitReady
 from friday.desktop.observation import ActiveWindow, Observation
 from friday.operations.registry import OperationError, parse_operation
 from server.backend.base import BackendError, DesktopBackend
 from server.backend.browser import BrowserBackend
+from server.backend.commands import secret_type_spec
 from server.backend.runner import SubprocessRunner
 from server.backend.x11 import X11Backend
 
 AUTH_TOKEN_ENV = "FRIDAY_CONTROL_TOKEN"
 DISPLAY_ENV = "DISPLAY"
 DEFAULT_DISPLAY = ":1"
+
+# Frames where a secret may be typed. A secret is only ever put into a focused
+# password field; the executor re-reads focus at execution time and, unless the
+# focused app is in this allowlist, refuses to type at all.
+SECRET_FOCUS_ALLOWED = frozenset({"browser"})
 
 
 @asynccontextmanager
@@ -66,6 +74,37 @@ def _backend() -> DesktopBackend:
 
 def _backend_error(error: BackendError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error))
+
+
+def _scrubbed_errors(errors: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Strip ``input`` / ``value`` / ``ctx`` from pydantic error dicts.
+
+    A 422 detail must never repeat the offending request field (which for a
+    secret-bearing action is a raw secret string). Keep only ``type``,
+    ``loc``, and ``msg``.
+    """
+    return [{key: error.get(key) for key in ("type", "loc", "msg")} for error in errors]
+
+
+@app.exception_handler(RequestValidationError)
+async def _scrubbed_validation_error(_request: Request, exc: RequestValidationError) -> Response:
+    """Return a 422 whose detail never echoes the submitted request fields.
+
+    FastAPI/pydantic normally repeat the offending value (and often the whole
+    body) in an ``input`` field of every error. For a secret-bearing endpoint
+    that value is a raw secret string, so this handler strips ``input``, the
+    exception ``ctx``, and every ``value``/``body`` key out of the detail before
+    returning it. Only ``type``, ``loc`` and ``msg`` survive.
+    """
+    detail: list[dict[str, object]] = []
+    for error in exc.errors():
+        safe = {key: error.get(key) for key in ("type", "loc", "msg")}
+        detail.append(safe)
+    return Response(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        media_type="application/json",
+        content=json.dumps({"detail": detail}),
+    )
 
 
 @app.get("/health")
@@ -122,7 +161,8 @@ def action(payload: dict[str, object]) -> ActionResult:
         desktop_action = parse_action(payload)
     except ValidationError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=error.errors()
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_scrubbed_errors(error.errors()),
         ) from error
     try:
         return _backend().execute(desktop_action)
@@ -135,13 +175,60 @@ def operation(payload: dict[str, object]) -> dict[str, object]:
     try:
         system_operation = parse_operation(payload, _backend().workspace)
     except (OperationError, ValidationError) as error:
+        detail = (
+            _scrubbed_errors(error.errors()) if isinstance(error, ValidationError) else str(error)
+        )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail
         ) from error
     try:
         return _backend().execute_operation(system_operation)
     except BackendError as error:
         raise _backend_error(error) from error
+
+
+_MAX_SECRET_VALUE_LENGTH = 4096
+
+
+@app.post("/type_secret", dependencies=[Depends(require_auth)])
+def type_secret(payload: dict[str, object]) -> dict[str, object]:
+    """Type a secret into the focused field, sending the value on stdin.
+
+    The body carries the secret value in transit, so it is never logged and
+    never echoed in an error body. The request contract is strict — exactly
+    ``name`` and ``value``, both strings — and a fresh focus read (a browser
+    frame only) gates whether anything is typed at all: focus rejection or any
+    validation failure types nothing.
+    """
+    if not isinstance(payload, dict) or set(payload) != {"name", "value"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="invalid type_secret request",
+        )
+    name = payload["name"]
+    value = payload["value"]
+    if not isinstance(name, str) or not name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="invalid type_secret request",
+        )
+    if not isinstance(value, str) or not value or len(value) > _MAX_SECRET_VALUE_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="invalid type_secret request",
+        )
+
+    focused = _backend().active_window().focused_app
+    if focused not in SECRET_FOCUS_ALLOWED:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"secret typing requires a {', '.join(sorted(SECRET_FOCUS_ALLOWED))} frame",
+        ) from None
+
+    action = TypeSecretAction.model_validate({"action": "type_secret", "name": name})
+    argv, stdin = secret_type_spec(action)(value)
+    _backend().run_secret_typed(argv, stdin)
+    return {"ok": True}
 
 
 def _browser() -> BrowserBackend:

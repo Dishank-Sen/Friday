@@ -9,8 +9,9 @@ from friday.actions.models import (
     ScrollAction,
     TripleClickAction,
     TypeAction,
+    TypeSecretAction,
 )
-from server.backend.commands import commands_for_action
+from server.backend.commands import commands_for_action, secret_type_spec
 
 
 def test_click_commands() -> None:
@@ -65,3 +66,24 @@ def test_scroll_and_mouse_button_commands() -> None:
     assert commands_for_action(LeftMouseUpAction(action="left_mouse_up")) == [
         ["xdotool", "mouseup", "1"]
     ]
+
+
+# --- type_secret: the value goes on stdin, never on argv -------------------
+
+
+def test_secret_type_commander_produces_a_stdin_commander_for_the_value() -> None:
+    spec = secret_type_spec(TypeSecretAction(action="type_secret", name="db_password"))
+
+    # the spec's argv is fixed and NEVER contains the secret value
+    argv, stdin = spec("hunter2")
+    assert argv == ["xdotool", "type", "--delay", "20", "--file", "-"]
+    assert "hunter2" not in argv
+    # the value travels only as stdin
+    assert stdin == "hunter2"
+
+
+def test_secret_type_spec_carries_a_newline_as_stdin() -> None:
+    argv, stdin = secret_type_spec(TypeSecretAction(action="type_secret", name="k"))("a\nb")
+
+    assert argv == ["xdotool", "type", "--delay", "20", "--file", "-"]
+    assert stdin == "a\nb"

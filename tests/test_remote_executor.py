@@ -8,6 +8,7 @@ from friday.actions.models import MouseMoveAction, TypeAction, ZoomAction
 from friday.desktop.client import DesktopClient
 from friday.executor.remote import RemoteExecutor
 from friday.sandbox.base import Sandbox
+from friday.secrets import SecretValue
 
 
 def _png() -> bytes:
@@ -127,3 +128,72 @@ def test_remote_executor_dispatches_operation_to_client() -> None:
     assert client.ops == [operation]
     assert client.sent == []
     assert result == {"ok": True, "pid": 42}
+
+
+# --- type_secret: resolve by name from a vault and send VALUE only to the
+# --- dedicated /type_secret path (never through the generic action dispatch)
+
+
+class _Vault:
+    def __init__(self, entries: dict[str, str]) -> None:
+        self._entries = {name: SecretValue(value) for name, value in entries.items()}
+
+    def contains(self, name: str) -> bool:
+        return name in self._entries
+
+    def get(self, name: str) -> SecretValue | None:
+        return self._entries.get(name)
+
+
+class FakeSecretClient(FakeClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.secret_typed: list[tuple[str, str]] = []  # (name, value)
+
+    def type_secret(self, name: str, value: str) -> None:
+        self.secret_typed.append((name, value))
+
+
+def test_remote_executor_types_a_secret_by_name_from_the_vault() -> None:
+    from friday.actions.models import TypeSecretAction
+
+    client = FakeSecretClient()
+    vault = _Vault({"db_password": "hunter2"})
+    executor = RemoteExecutor(client, secrets=vault)  # type: ignore[arg-type]
+    action = TypeSecretAction(action="type_secret", name="db_password")
+
+    result = executor.execute(action)
+
+    assert result.ok
+    # value went to the secret path, not the generic action dispatch
+    assert client.secret_typed == [("db_password", "hunter2")]
+    assert client.sent == []
+
+
+def test_remote_executor_rejects_an_unknown_secret_name_without_typing() -> None:
+    from friday.actions.models import TypeSecretAction
+
+    client = FakeSecretClient()
+    vault = _Vault({"db_password": "hunter2"})
+    executor = RemoteExecutor(client, secrets=vault)  # type: ignore[arg-type]
+    action = TypeSecretAction(action="type_secret", name="nope")
+
+    result = executor.execute(action)
+
+    assert result.ok is False
+    assert client.secret_typed == []
+    assert client.sent == []
+
+
+def test_remote_executor_without_a_vault_rejects_secret_typing() -> None:
+    from friday.actions.models import TypeSecretAction
+
+    client = FakeSecretClient()
+    executor = RemoteExecutor(client)  # no vault
+    action = TypeSecretAction(action="type_secret", name="db_password")
+
+    result = executor.execute(action)
+
+    assert result.ok is False
+    assert client.secret_typed == []
+    assert client.sent == []

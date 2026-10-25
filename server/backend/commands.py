@@ -16,6 +16,7 @@ from friday.actions.models import (
     ShortcutAction,
     TripleClickAction,
     TypeAction,
+    TypeSecretAction,
 )
 from friday.operations.registry import SystemOperation, _argv
 
@@ -59,6 +60,31 @@ def type_commands(text: str) -> list[list[str]]:
         if index < len(lines) - 1:
             commands.append(["xdotool", "key", "--", "Return"])
     return commands
+
+
+class SecretTypeSpec:
+    """argv for typing a secret by name, given the value as stdin.
+
+    ``call(value)`` returns ``(argv, stdin)``. The argv is fixed and never
+    contains the value: ``xdotool type --file -`` reads the payload from stdin,
+    so the value is invisible even transiently in ``ps`` output.
+    """
+
+    def __call__(self, value: str) -> tuple[list[str], str]:
+        # ``--file -`` reads the typed text from stdin; the value is never an
+        # argv element, which is the entire point of the secret path.
+        return ["xdotool", "type", "--delay", "20", "--file", "-"], value
+
+
+def secret_type_spec(action: TypeSecretAction) -> SecretTypeSpec:
+    """Return a stdin-based typing spec for ``type_secret ``(name-only) action.
+
+    The ``action`` argument is accepted so call sites treat the secret path
+    uniformly (resolve by name, then stream the value on stdin); only its
+    name/identity is used here.
+    """
+    del action  # the argv is identical for any name; the value comes via stdin
+    return SecretTypeSpec()
 
 
 def scroll_commands(action: ScrollAction) -> list[list[str]]:

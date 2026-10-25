@@ -327,6 +327,26 @@ def test_shortcut_unavailable_for_unknown_focus_is_rejected() -> None:
     assert "not available for focus" in result["hint"]
 
 
+def test_type_secret_needs_no_approval_and_is_allowed() -> None:
+    node = _guard(policy=_Policy(approval=False))
+    pending = {"action": "type_secret", "name": "db_password"}
+
+    result = node(_state(pending_action=pending, focused_app="browser"))
+
+    # type_secret is not in an approval-required category; it is the executor's
+    # focus gate and vault resolution that decide whether anything is typed.
+    assert result["guard_verdict"] == "allow"
+
+
+def test_type_secret_rejects_a_blank_name() -> None:
+    node = _guard()
+    pending = {"action": "type_secret", "name": "  "}
+
+    result = node(_state(pending_action=pending, focused_app="browser"))
+
+    assert result["guard_verdict"] == "reject"
+
+
 def test_default_binding_shortcut_allowed_for_unbound_focus() -> None:
     # A shortcut with a default binding resolves for any focus, including none.
     node = _guard()

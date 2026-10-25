@@ -218,6 +218,21 @@ def test_typed_text_canary_never_reaches_last_result() -> None:
     assert "the-typed-token" not in dumped
 
 
+def test_type_secret_canary_never_reaches_last_result() -> None:
+    from friday.actions.models import ActionResult
+
+    # even if the executor surfaced the value in a detail (it should not), the
+    # type_secret value must be treated as sensitive and stripped. The NAME is
+    # not secret and may surface; the VALUE never may.
+    executor = _FakeExecutor(ActionResult(ok=True, detail="typed db_password hunter2"))
+    node = _node(executor=executor)
+
+    result = node(_state({"action": "type_secret", "name": "db_password"}))
+
+    dumped = json.dumps(result["last_result"])
+    assert "hunter2" not in dumped
+
+
 def test_result_is_json_serializable_and_bounded() -> None:
     executor = _FakeExecutor()
     node = _node(executor=executor)
